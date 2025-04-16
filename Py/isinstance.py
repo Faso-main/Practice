@@ -1,4 +1,7 @@
-""" isinstance(object, type) """
+""" isinstance(object, type) 
+object	Required. An object.
+type	A type or a class, or a tuple of types and/or classes
+"""
 
 array_list=[itr for itr in range(1,11,1)] # array [1 to 10]
 
