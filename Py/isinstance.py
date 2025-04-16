@@ -13,6 +13,7 @@ array_str=str(array_list) # changing the type of the entity
 
 print(f'Changed: {isinstance(array_str,str)}') # isinstance in action
 
+
 def is_unicode(s):
   if isinstance(s, str):
     return True
