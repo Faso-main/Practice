@@ -6,7 +6,6 @@ import functools
 from typing import get_type_hints
 
 def pointers_to_types(func):
-    """Декоратор для проверки типов аргументов функции на основе аннотаций."""
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         type_hints = get_type_hints(func)
