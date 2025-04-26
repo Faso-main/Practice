@@ -12,3 +12,16 @@ print("Возведение в степень:", a ** 2)  # [1 4 9]
 # Матричное умножение
 dot_product = np.dot(a, b)     # 1*4 + 2*5 + 3*6 = 32
 print("Скалярное произведение:", dot_product)
+
+arr = np.arange(6)
+print("Исходный массив:", arr)  # [0 1 2 3 4 5]
+
+# Изменение формы
+reshaped = arr.reshape(2, 3)
+print("Массив 2x3:\n", reshaped)
+# [[0 1 2]
+#  [3 4 5]]
+
+# Преобразование в одномерный
+flattened = reshaped.flatten()
+print("Снова одномерный:", flattened)  # [0 1 2 3 4 5]
