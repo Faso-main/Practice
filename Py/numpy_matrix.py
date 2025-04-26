@@ -25,3 +25,17 @@ print("Массив 2x3:\n", reshaped)
 # Преобразование в одномерный
 flattened = reshaped.flatten()
 print("Снова одномерный:", flattened)  # [0 1 2 3 4 5]
+
+matrix = np.array([[3, 1], [2, 5], [4, 0]])
+
+transposed = matrix.T
+print("Транспонированная матрица:\n", transposed)
+# [[3 2 4]
+#  [1 5 0]]
+
+# Сортировка
+sorted_arr = np.sort(matrix, axis=0)  # сортировка по столбцам
+print("Отсортированная по столбцам:\n", sorted_arr)
+# [[2 0]
+#  [3 1]
+#  [4 5]]
