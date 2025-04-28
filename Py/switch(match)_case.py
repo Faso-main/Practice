@@ -7,9 +7,19 @@ def number_to_string(argument):
             return "one"
         case 2:
             return "two"
-        case default:
+        case _: # Аналог default в других языках
             return "something"
  
 
-head = number_to_string(2)
+head = number_to_string(4)
 print(head)
+
+value = (0, 5)
+
+match value:
+    case (0, y):
+        print(f"Y = {y}")  # Сработает, если первый элемент 0
+    case (x, 0):
+        print(f"X = {x}")
+    case _:
+        print("Не подходит")
