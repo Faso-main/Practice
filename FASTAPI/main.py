@@ -1,9 +1,10 @@
 from typing import Union
-from fastapi import FastAPI
 
+from fastapi import FastAPI
 
 app = FastAPI()
 
+# fastapi run FASTAPI/main.py 
 
 @app.get("/")
 def read_root():

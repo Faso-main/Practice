@@ -5,3 +5,4 @@ Test/Govorun.py
 Test/saiga_yandexgpt_8b.Q4_K_M.gguf
 Test/saiga2_7b.Q4_K_M.gguf
 Test/Не подтвержден 847415.crdownload
+FASTAPI/__pycache__/main.cpython-311.pyc
