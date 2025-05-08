@@ -1,7 +1,7 @@
 *.ini
 Py/test.py
 Test/Govorun.py
-Test/saiga_yandexgpt_8b.Q4_K_M.gguf
+Test/
 Test/saiga2_7b.Q4_K_M.gguf
 Test/Не подтвержден 847415.crdownload
 *__pycache__/
