@@ -1,6 +1,5 @@
-import ctypes
 """
-Code snippet example of universal, flexible error handling 
+Code snippet: pointers 
 """
 
 def allocate_matrix(rows, cols, initial=0):

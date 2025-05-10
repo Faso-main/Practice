@@ -1,5 +1,5 @@
 """
-Code snippet example of cash, same task called decorator
+Code snippet: dictionary comprehension
 """
 
 integers_array=[itr for itr in range(1,6,1)]
