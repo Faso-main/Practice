@@ -1,0 +1,30 @@
+```mermaid
+flowchart LR
+    %% Определяем направление графа: слева направо (Left-to-Right)
+
+    subgraph "System Architecture: ruT5 Classification"
+        direction TB %% Направление подграфа: сверху вниз (Top-to-Bottom)
+
+        subgraph "Training Phase"
+            direction LR %% Направление этапа обучения: слева направо
+
+            RawData[Raw JSON Data<br/>(fake_marked.json)] --> TrainingScript[Python Training Script<br/>(Your Code)]
+            TrainingScript --> TrainedArtifacts(Trained ruT5 Model &<br/>Tokenizer Files)
+            TrainingScript --> LabelMapping(Label Mapping<br/>label2id.json)
+            TrainingScript --> TrainingResults[Training Results<br/>(CSV, Plot)]
+        end
+
+        subgraph "Inference Phase"
+            direction LR %% Направление этапа инференса: слева направо
+
+            User((User)) --> ReactFrontend[React Frontend]
+            ReactFrontend --> FastAPIBackend[FastAPI Backend]
+            FastAPIBackend --> |Sends Result| ReactFrontend
+            ReactFrontend --> |Displays Result| User
+        end
+
+        %% Соединения между этапами (бэкенд загружает артефакты обучения)
+        FastAPIBackend --> |Loads Model/Tokenizer| TrainedArtifacts
+        FastAPIBackend --> |Loads Mapping| LabelMapping
+    end
+```
