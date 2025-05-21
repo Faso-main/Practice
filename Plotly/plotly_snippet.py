@@ -54,7 +54,7 @@ wbs_items_timed = [
 # Словарь для хранения дат завершения задач по их ID
 task_finish_dates = {}
 # Начальная дата проекта
-project_start_date = datetime(2025, 6, 1)
+project_start_date = datetime(2025, 1, 1)
 
 # Список данных для Plotly
 gantt_data = []
@@ -105,23 +105,44 @@ fig = ff.create_gantt(gantt_data,
                       index_col='Resource', # Группировать/раскрашивать по фазам
                       show_colorbar=True,
                       group_tasks=True, # Группировать задачи по ресурсу (фазе) на оси Y
-                      title='Диаграмма Ганта проекта: Интеллектуальная система поддержки клинических решений',
+                      title='Диаграмма Ганта проекта: Система анализа неструктурированных медицинских данных',
                       bar_width=0.6,
                       # show_arrows=False, # Эту строку нужно удалить, так как она вызывает ошибку
                      )
 
 # --- Настройка внешнего вида ---
 fig.update_layout(
+    hovermode='closest', 
+    xaxis=dict(
+        tickfont=dict(size=12), 
+        tickformat='%Y-%m',  # Изменено на формат год-месяц
+        dtick='M1',          # Отображать метки каждого месяца
+        showgrid=True,       # Отображение сетки
+        gridwidth=1,         # Ширина линий сетки
+        gridcolor='LightGrey'# Цвет линий сетки
+    ),
+    yaxis=dict(
+        tickfont=dict(size=12), 
+        categoryorder='category ascending' 
+    ),
+)
+"""
+fig.update_layout(
     hovermode='closest', # Режим отображения всплывающих подсказок
     xaxis=dict(
         tickfont=dict(size=10), # Размер шрифта меток оси X
+        tickformat='%Y-%m-%d',  # Формат меток даты: год-месяц-день
+        dtick='D1',             # Интервал меток: 1 день. Используйте 'W1' для еженедельных меток.
+        showgrid=True,          # Отображение сетки
+        gridwidth=1,            # Ширина линий сетки
+        gridcolor='LightGrey'   # Цвет линий сетки
     ),
     yaxis=dict(
         tickfont=dict(size=10), # Размер шрифта меток оси Y
         categoryorder='category ascending' # Порядок отображения задач (сверху вниз в порядке списка)
     ),
 )
-
+"""
 # --- Отображение диаграммы ---
 fig.show()
 
