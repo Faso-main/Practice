@@ -57,7 +57,7 @@ for i in range(1,num_of_instances):
             y_test.append(emotion)
             x_test.append(pixels)
     except:
-	print("",end="")
+        print("",end="")
 
 #------------------------------
 #data transformation for train and test sets
