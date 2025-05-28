@@ -3,7 +3,7 @@ Code snippet: map iterator
 """
 
 
-def my_funс(x): return x*2 # Метод перемножения значений
+def my_funс(x): return x**2 # Метод перемножения значений
 
 num_array=[itr for itr in range(1,11,1)] # Array 1-10
 
