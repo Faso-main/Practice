@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import colorchooser, simpledialog, messagebox
 import numpy as np
 import math
-from PIL import Image, ImageTk # Убедитесь, что Pillow установлен: pip install Pillow
+from PIL import Image, ImageTk 
 
 # Класс для точки (пиксельные координаты)
 class Point:
@@ -124,6 +124,56 @@ class Flag(GraphicObject):
     def draw(self, editor_instance):
         # Заливаем и рисуем контур с помощью Scanline
         editor_instance.scanline_fill(self.points, self.color, self.fill_color)
+
+# Кривая Безье
+class BezierCurve(GraphicObject):
+    def __init__(self, control_points, color="#000000"):
+        super().__init__(color=color)
+        self.control_points = control_points # Точки, которые будут использоваться для построения кривой
+        self.points = [] # Точки самой кривой
+        self.recalculate_curve_points()
+        self.calculate_center()
+
+    def recalculate_curve_points(self, num_segments=100):
+        # Пересчитываем точки кривой на основе контрольных точек
+        self.points = []
+        for i in range(num_segments + 1):
+            t = i / num_segments
+            self.points.append(self._de_casteljau(t))
+
+    def _de_casteljau(self, t):
+        # Алгоритм де Кастельжо для вычисления точки на кривой Безье
+        points = list(self.control_points) # Копируем, чтобы не изменять оригинальные точки
+        
+        while len(points) > 1:
+            new_points = []
+            for i in range(len(points) - 1):
+                x = (1 - t) * points[i].x + t * points[i+1].x
+                y = (1 - t) * points[i].y + t * points[i+1].y
+                new_points.append(Point(x, y))
+            points = new_points
+        return points[0]
+
+    def apply_transform(self, transform_matrix):
+        # Применяем преобразование к контрольным точкам, затем пересчитываем кривую
+        new_control_points_homogeneous = []
+        for p in self.control_points:
+            hom_coords = p.to_homogeneous()
+            transformed_hom_coords = np.dot(hom_coords, transform_matrix)
+            new_control_points_homogeneous.append(Point.from_homogeneous(transformed_hom_coords))
+        self.control_points = new_control_points_homogeneous
+        self.recalculate_curve_points() # Пересчитываем точки кривой
+        self.calculate_center() # Пересчитываем центр
+
+    def draw(self, editor_instance):
+        # Рисуем кривую, соединяя ее точки отрезками
+        if len(self.points) > 1:
+            for i in range(len(self.points) - 1):
+                editor_instance.bresenham_line(self.points[i], self.points[i+1], self.color)
+        
+        # Опционально: отрисовать контрольные точки
+        for cp in self.control_points:
+            editor_instance.put_pixel(cp.x, cp.y, "#0000FF", width=3) # Синие точки для контрольных
 
 
 # Класс для матричных преобразований
@@ -286,6 +336,7 @@ class GraphicEditor:
         primitives_menu.add_command(label="Отрезок", command=lambda: self.start_drawing("line"))
         primitives_menu.add_command(label="Крест (Kr)", command=lambda: self.start_drawing("cross"))
         primitives_menu.add_command(label="Флаг (Flag)", command=lambda: self.start_drawing("flag"))
+        primitives_menu.add_command(label="Кривая Безье", command=lambda: self.start_drawing("bezier"))
 
         # Меню "ТМО" (Теоретико-множественные операции)
         tmo_menu = tk.Menu(menubar, tearoff=0)
@@ -321,6 +372,7 @@ class GraphicEditor:
         tk.Button(toolbar, text="Отрезок", command=lambda: self.start_drawing("line")).pack(side=tk.LEFT, padx=2, pady=2)
         tk.Button(toolbar, text="Крест", command=lambda: self.start_drawing("cross")).pack(side=tk.LEFT, padx=2, pady=2)
         tk.Button(toolbar, text="Флаг", command=lambda: self.start_drawing("flag")).pack(side=tk.LEFT, padx=2, pady=2)
+        tk.Button(toolbar, text="Безье", command=lambda: self.start_drawing("bezier")).pack(side=tk.LEFT, padx=2, pady=2)
         tk.Button(toolbar, text="Выбрать", command=self.select_object_mode).pack(side=tk.LEFT, padx=2, pady=2)
         tk.Button(toolbar, text="Удалить", command=self.delete_selected_object).pack(side=tk.LEFT, padx=2, pady=2)
         tk.Button(toolbar, text="Перемещение", command=self.start_translation).pack(side=tk.LEFT, padx=2, pady=2)
@@ -419,6 +471,19 @@ class GraphicEditor:
                     self.canvas.config(cursor="arrow")
                     self.selected_object = flag
                     self.redraw_all_objects()
+            elif self.drawing_primitive == "bezier":
+                # Для Безье нужно 3 или 4 точки (для квадратичной/кубической)
+                if len(self.temp_points) == 3 or len(self.temp_points) == 4:
+                    bezier_curve = BezierCurve(self.temp_points, self.current_color)
+                    self.objects.append(bezier_curve)
+                    self.drawing_primitive = None
+                    self.canvas.config(cursor="arrow")
+                    self.selected_object = bezier_curve
+                    self.redraw_all_objects()
+                elif len(self.temp_points) > 4: # Если пользователь кликнул больше, чем нужно
+                    messagebox.showwarning("Ошибка", "Для кривой Безье требуется 3 или 4 контрольные точки. Попробуйте снова.")
+                    self.temp_points = []
+                    self.redraw_all_objects() # Очищаем временные маркеры
 
         elif self.current_transformation_mode == "rotation_around_point":
             # Устанавливаем центр вращения и запрашиваем угол
@@ -459,6 +524,17 @@ class GraphicEditor:
             self.start_drag_x = event.x
             self.start_drag_y = event.y
             self.redraw_all_objects()
+        elif self.drawing_primitive == "bezier" and len(self.temp_points) > 0:
+            # Временная отрисовка линии при добавлении контрольных точек Безье
+            self.redraw_all_objects() # Очищаем и перерисовываем
+            if len(self.temp_points) == 1: # Отрезок от первой до текущей точки
+                self.bresenham_line(self.temp_points[0], Point(event.x, event.y), "#AAAAAA", width=1)
+            elif len(self.temp_points) >= 2: # Отрезки между контрольными точками
+                temp_bezier_points = list(self.temp_points) + [Point(event.x, event.y)]
+                temp_bezier = BezierCurve(temp_bezier_points, "#AAAAAA")
+                temp_bezier.draw(self)
+            self.update_canvas_image()
+
 
     def on_canvas_release(self, event):
         # Завершение перетаскивания
@@ -476,6 +552,23 @@ class GraphicEditor:
                 if self.is_point_in_polygon(Point(x, y), obj.points):
                     selected_by_area = obj
                     break
+            elif isinstance(obj, BezierCurve):
+                # Для Безье проверяем близость к кривой или контрольным точкам
+                for cp in obj.control_points:
+                    if math.sqrt((x - cp.x)**2 + (y - cp.y)**2) < 10: # Если клик по контрольной точке
+                        selected_by_area = obj
+                        break
+                if not selected_by_area:
+                    # Проверяем близость к самой кривой
+                    for i in range(len(obj.points) - 1):
+                        p1 = obj.points[i]
+                        p2 = obj.points[i+1]
+                        dist = self.point_line_distance(Point(x, y), p1, p2)
+                        if dist < 5:
+                            selected_by_area = obj
+                            break
+                if selected_by_area:
+                    break
         
         if selected_by_area:
             self.selected_object = selected_by_area
@@ -492,8 +585,6 @@ class GraphicEditor:
                         min_dist = dist
                         closest_line = obj
             self.selected_object = closest_line
-
-        self.redraw_all_objects()
 
     def point_line_distance(self, pt, p1, p2):
         # Расстояние от точки до отрезка
@@ -565,7 +656,18 @@ class GraphicEditor:
                     p1 = points[i]
                     p2 = points[(i + 1) % n]
                     self.bresenham_line(p1, p2, "#FF0000", width=5)
-        
+            elif isinstance(self.selected_object, BezierCurve):
+                # Выделение для кривой Безье: отрисовка контрольных точек и соединяющих их линий
+                for cp in self.selected_object.control_points:
+                    self.put_pixel(cp.x, cp.y, "#FF0000", width=5) # Красные точки для выделенных контрольных
+                
+                # Отрисовка "многоугольника" из контрольных точек
+                for i in range(len(self.selected_object.control_points) - 1):
+                    p1 = self.selected_object.control_points[i]
+                    p2 = self.selected_object.control_points[i+1]
+                    self.bresenham_line(p1, p2, "#FF8C00", width=1) # Оранжевые линии
+
+
         # Обновляем изображение на Canvas
         self.update_canvas_image()
         
@@ -578,7 +680,7 @@ class GraphicEditor:
         
         # Если объект выбран, рисуем его центр
         if self.selected_object and self.selected_object.center:
-            self.draw_transform_marker(self.selected_object.center.x, self.selected_object.center.y, "#FF0000")
+            self.draw_transform_marker(self.selected_object.center.x, self.selected_object.center.y, "#00FF00")
 
     def put_pixel(self, x, y, color_hex, width=1):
         # Установка пикселя (с учетом толщины)
@@ -657,7 +759,7 @@ class GraphicEditor:
             
             intersections.sort() # Сортируем точки пересечения
 
-            for i in range(0, len(intersections), 2): # Заливаем попарно
+            for i in range(0, len(intersections), 2):
                 if i + 1 < len(intersections):
                     x_start = int(round(intersections[i]))
                     x_end = int(round(intersections[i+1]))
@@ -691,12 +793,12 @@ class GraphicEditor:
 
     def perform_intersection(self):
         # Сообщение о нереализованной ТМО
-        messagebox.showinfo("ТМО: Пересечение", "Пересечение сложных многоугольников не реализовано.")
+        messagebox.showinfo("ТМО: Пересечение", "Пересечение многоугольников не реализовано.")
         return None
 
     def perform_difference(self):
         # Сообщение о нереализованной ТМО
-        messagebox.showinfo("ТМО: Разность", "Разность сложных многоугольников не реализована.")
+        messagebox.showinfo("ТМО: Разность", "Разность многоугольников не реализована.")
         return None
 
     # Геометрические преобразования
@@ -706,7 +808,6 @@ class GraphicEditor:
             messagebox.showwarning("Ошибка", "Сначала выберите объект для перемещения.")
             return
         self.current_transformation_mode = "translation"
-        messagebox.showinfo("Перемещение", "Переместите объект, перетаскивая его мышью.")
         self.canvas.config(cursor="fleur")
 
     def start_rotation_around_point(self):
@@ -715,7 +816,6 @@ class GraphicEditor:
             messagebox.showwarning("Ошибка", "Сначала выберите объект для поворота.")
             return
         self.current_transformation_mode = "rotation_around_point"
-        messagebox.showinfo("Поворот (Rc)", "Кликните на холсте, чтобы задать центр поворота.")
         self.canvas.config(cursor="dotbox")
 
     def mirror_around_figure_center(self):
@@ -732,7 +832,6 @@ class GraphicEditor:
             messagebox.showwarning("Ошибка", "Сначала выберите объект для отражения.")
             return
         self.current_transformation_mode = "mirror_vertical_line"
-        messagebox.showinfo("Зеркальное отражение (MV)", "Кликните на холсте, чтобы задать вертикальную линию отражения.")
         self.canvas.config(cursor="sb_v_double_arrow")
 
     def draw_temp_vertical_line(self, x):

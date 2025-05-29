@@ -35,7 +35,7 @@ class Point:
 
 # Базовый класс для всех графических объектов
 class GraphicObject:
-    def __init__(self, color="black", fill_color="blue"):
+    def __init__(self, color="black", fill_color="green"):
         self.points = []
         self.color = color
         self.fill_color = fill_color
@@ -83,7 +83,7 @@ class Line(GraphicObject):
                                       fill=self.color, width=2)
 
 class Cross(GraphicObject): # Kr
-    def __init__(self, center_x, center_y, size, color="black", fill_color="blue"):
+    def __init__(self, center_x, center_y, size, color="black", fill_color="green"):
         super().__init__(color=color, fill_color=fill_color)
         # Примерные координаты креста
         half_size = size / 2
@@ -114,7 +114,7 @@ class Cross(GraphicObject): # Kr
 
 
 class Flag(GraphicObject): # Flag
-    def __init__(self, base_x, base_y, width, height, color="black", fill_color="blue"):
+    def __init__(self, base_x, base_y, width, height, color="black", fill_color="green"):
         super().__init__(color=color, fill_color=fill_color)
         # Примерные координаты флага
         self.points = [
@@ -228,13 +228,13 @@ class SetOperations:
     #  - Пересечение
     @staticmethod
     def intersection(obj1, obj2):
-        messagebox.showinfo("ТМО: Пересечение", "Реализация пересечения сложных многоугольников требует продвинутых алгоритмов (например, Сазерленнда-Ходжмана). В данной версии не реализовано.")
+        messagebox.showinfo("ТМО: Пересечение", "Реализация пересечения сложных многоугольников требует продвинутых алгоритмов (например, Сазерленнда-Ходжмана).")
         return None
 
     #  - Разность
     @staticmethod
     def difference(obj1, obj2):
-        messagebox.showinfo("ТМО: Разность", "Реализация разности сложных многоугольников требует продвинутых алгоритмов. В данной версии не реализовано.")
+        messagebox.showinfo("ТМО: Разность", "Реализация разности сложных многоугольников требует продвинутых алгоритмов.")
         return None
 
 
@@ -244,7 +244,7 @@ class GraphicEditor:
         master.title("Графический редактор (Вариант 70)")
 
         self.current_color = "black"
-        self.current_fill_color = "blue"
+        self.current_fill_color = "green"
         self.objects = []
         self.selected_object = None
         self.drawing_primitive = None # Текущий примитив, который рисуется
@@ -253,7 +253,7 @@ class GraphicEditor:
         self.transform_center_marker_id = None # ID для маркера центра преобразования
         self.current_transformation_mode = None # Для отслеживания текущего режима трансформации
 
-        self.canvas = tk.Canvas(master, width=800, height=600, bg="white", borderwidth=2, relief="groove")
+        self.canvas = tk.Canvas(master, width=1200, height=600, bg="white", borderwidth=2, relief="groove")
         self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         self.create_menu()
