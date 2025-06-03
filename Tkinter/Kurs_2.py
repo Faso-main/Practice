@@ -33,7 +33,7 @@ class Point:
 
 # Базовый класс для всех графических фигур
 class GraphicObject:
-    def __init__(self, color="#000000", fill_color="#FFFFFFFF"):
+    def __init__(self, color="#000000", fill_color="#0003AEFF"):
         self.points = [] # Список точек, определяющих фигуру
         self.color = color # Цвет контура фигуры (по умолчанию черный)
         self.fill_color = fill_color # Цвет заливки фигуры (по умолчанию полупрозрачный зеленый)
@@ -64,7 +64,9 @@ class GraphicObject:
 
         sum_x = sum(p.x for p in self.points) # Сумма всех X-координат
         sum_y = sum(p.y for p in self.points) # Сумма всех Y-координат
-        self.center = Point(sum_x / len(self.points), sum_y / len(self.points)) # Вычисление среднего арифметического для X и Y
+        meanX=sum_x / len(self.points)
+        meanY=sum_y / len(self.points)
+        self.center = Point(meanX, meanY) # Вычисление среднего арифметического для X и Y
 
 
 # Класс для рисования линии (отрезка)
@@ -110,16 +112,17 @@ class Cross(GraphicObject):
 # Класс для рисования флага (Flag)
 class Flag(GraphicObject):
     def __init__(self, base_x, base_y, width, height, color="#000000", fill_color="#FFFFFFFF"):
-        super().__init__(color=color, fill_color=fill_color) # Вызов конструктора базового класса
-        # Определение точек, образующих многоугольник в форме флага
+        super().__init__(color=color, fill_color=fill_color)
+        # Определение точек флага с вырезанным треугольником с правого края
         self.points = [
-            Point(base_x, base_y),
-            Point(base_x, base_y - height),
-            Point(base_x + width, base_y - height),
-            Point(base_x + width, base_y - height / 2),
-            Point(base_x, base_y - height / 2)
+            Point(base_x, base_y), 
+            Point(base_x, base_y - height), 
+            Point(base_x + width, base_y - height), 
+            Point(base_x + width, base_y - height/2),  
+            Point(base_x + width, base_y),
+            Point(base_x + width/2, base_y - height/2) 
         ]
-        self.calculate_center() # Вычисление центра флага
+        self.calculate_center()
 
     def draw(self, editor_instance, pixel_buffer=None):
         # Заливка и отрисовка контура флага с использованием Scanline алгоритма
@@ -441,7 +444,7 @@ class GraphicEditor:
         master.title("Графический редактор (Вариант 70)") # Установка заголовка окна
 
         self.current_color = "#000000" # Текущий цвет обводки (по умолчанию черный)
-        self.current_fill_color = "#FFFFFFFF" # Текущий цвет заливки (по умолчанию полупрозрачный зеленый)
+        self.current_fill_color = "#0003AEFF" 
         self.objects = [] # Список всех графических объектов на холсте
         self.selected_object = None # Выбранный в данный момент объект
         self.drawing_primitive = None # Текущий режим рисования (например, "line", "cross")
@@ -983,7 +986,7 @@ class GraphicEditor:
                 err += dx
                 y1 += sy
 
-    # Алгоритм Scanline для закрашивания полигона
+    # Алгоритм Scanline для закрашивания полигона (ЗАКРАШИВАНИЕ) (PAINT)
     def scanline_fill(self, points, outline_color, fill_color, pixel_buffer=None):
         if not points: # Если точек нет, ничего не рисуем
             return
