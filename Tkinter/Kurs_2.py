@@ -63,9 +63,12 @@ class GraphicObject:
             return
 
         sum_x = sum(p.x for p in self.points) # Сумма всех X-координат
+        #print(f'Result X:{sum_x}')
         sum_y = sum(p.y for p in self.points) # Сумма всех Y-координат
+        #print(f'Result X:{sum_y}')
         meanX=sum_x / len(self.points)
         meanY=sum_y / len(self.points)
+        print(f'Reslut:{len(self.points)}')
         self.center = Point(meanX, meanY) # Вычисление среднего арифметического для X и Y
 
 
@@ -118,7 +121,6 @@ class Flag(GraphicObject):
             Point(base_x, base_y), 
             Point(base_x, base_y - height), 
             Point(base_x + width, base_y - height), 
-            Point(base_x + width, base_y - height/2),  
             Point(base_x + width, base_y),
             Point(base_x + width/2, base_y - height/2) 
         ]
