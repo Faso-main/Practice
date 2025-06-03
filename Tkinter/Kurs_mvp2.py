@@ -26,7 +26,7 @@ class Point:
 
 # Базовый класс для всех графических объектов
 class GraphicObject:
-    def __init__(self, color="black", fill_color="green"):
+    def __init__(self, color="black", fill_color="blue"):
         self.points = []
         self.color = color
         self.fill_color = fill_color
@@ -69,12 +69,13 @@ class Line(GraphicObject):
     def draw(self, canvas):
         if self.id:
             canvas.delete(self.id)
+        # Линии используют 'fill' для своего цвета, а не 'outline'
         self.id = canvas.create_line(self.points[0].x, self.points[0].y,
                                       self.points[1].x, self.points[1].y,
                                       fill=self.color, width=2)
 
 class Cross(GraphicObject): # Kr
-    def __init__(self, center_x, center_y, size, color="black", fill_color="green"):
+    def __init__(self, center_x, center_y, size, color="black", fill_color="blue"):
         super().__init__(color=color, fill_color=fill_color)
         # Примерные координаты креста
         half_size = size / 2
@@ -101,11 +102,12 @@ class Cross(GraphicObject): # Kr
         coords = []
         for p in self.points:
             coords.extend([p.x, p.y])
+        # Полигоны используют 'outline' для границы и 'fill' для заливки
         self.id = canvas.create_polygon(coords, outline=self.color, fill=self.fill_color, width=2)
 
 
 class Flag(GraphicObject): # Flag
-    def __init__(self, base_x, base_y, width, height, color="black", fill_color="green"):
+    def __init__(self, base_x, base_y, width, height, color="black", fill_color="blue"):
         super().__init__(color=color, fill_color=fill_color)
         # Примерные координаты флага
         self.points = [
@@ -123,7 +125,55 @@ class Flag(GraphicObject): # Flag
         coords = []
         for p in self.points:
             coords.extend([p.x, p.y])
+        # Полигоны используют 'outline' для границы и 'fill' для заливки
         self.id = canvas.create_polygon(coords, outline=self.color, fill=self.fill_color, width=2)
+
+class BezierCurve(GraphicObject):
+    def __init__(self, control_points, color="black"):
+        super().__init__(color=color)
+        self.control_points = control_points # Храним контрольные точки отдельно
+        self.calculate_curve_points() # Генерируем точки на кривой
+        self.calculate_center()
+
+    def calculate_curve_points(self, num_segments=100):
+        if len(self.control_points) < 2:
+            self.points = []
+            return
+
+        curve_points = []
+        n = len(self.control_points) - 1
+        for i in range(num_segments + 1):
+            t = i / num_segments
+            x, y = 0, 0
+            for k in range(n + 1):
+                # Биномиальный коэффициент nCk
+                coeff = (math.factorial(n) / (math.factorial(k) * math.factorial(n - k)))
+                x += coeff * (1 - t)**(n - k) * t**k * self.control_points[k].x
+                y += coeff * (1 - t)**(n - k) * t**k * self.control_points[k].y
+            curve_points.append(Point(x, y))
+        self.points = curve_points
+
+    def draw(self, canvas):
+        if self.id:
+            canvas.delete(self.id)
+        if len(self.points) > 1:
+            coords = []
+            for p in self.points:
+                coords.extend([p.x, p.y])
+            # Кривые Безье используют 'fill' для своего цвета, а не 'outline'
+            self.id = canvas.create_line(coords, fill=self.color, width=2, smooth=True)
+
+    def apply_transform(self, transform_matrix):
+        # Применяем преобразование к контрольным точкам
+        new_control_points_homogeneous = []
+        for p in self.control_points:
+            hom_coords = p.to_homogeneous()
+            transformed_hom_coords = np.dot(hom_coords, transform_matrix)
+            new_control_points_homogeneous.append(Point.from_homogeneous(transformed_hom_coords.reshape(1, 3)))
+        self.control_points = new_control_points_homogeneous
+        # Пересчитываем точки кривой и центр после преобразования контрольных точек
+        self.calculate_curve_points()
+        self.calculate_center()
 
 
 # Класс для матричных преобразований
@@ -219,13 +269,19 @@ class SetOperations:
     #  - Пересечение
     @staticmethod
     def intersection(obj1, obj2):
-        messagebox.showinfo("ТМО: Пересечение", "Реализация пересечения сложных многоугольников требует продвинутых алгоритмов (например, Сазерленнда-Ходжмана). В данной версии не реализовано.")
+        messagebox.showinfo("ТМО: Пересечение", "Реализация пересечения сложных многоугольников и кривых требует продвинутых алгоритмов (например, Сазерленнда-Ходжмана для полигонов, или специализированных для кривых Безье). В данной версии не реализована.")
         return None
 
     #  - Разность
     @staticmethod
     def difference(obj1, obj2):
-        messagebox.showinfo("ТМО: Разность", "Реализация разности сложных многоугольников требует продвинутых алгоритмов. В данной версии не реализовано.")
+        messagebox.showinfo("ТМО: Разность", "Реализация разности сложных многоугольников и кривых требует продвинутых алгоритмов. В данной версии не реализована.")
+        return None
+
+    #  - Объединение
+    @staticmethod
+    def union(obj1, obj2):
+        messagebox.showinfo("ТМО: Объединение", "Реализация объединения сложных многоугольников и кривых требует продвинутых алгоритмов. В данной версии не реализована.")
         return None
 
 
@@ -235,7 +291,7 @@ class GraphicEditor:
         master.title("Графический редактор (Вариант 70)")
 
         self.current_color = "black"
-        self.current_fill_color = "green"
+        self.current_fill_color = "blue"
         self.objects = []
         self.selected_object = None
         self.drawing_primitive = None # Текущий примитив, который рисуется
@@ -243,6 +299,8 @@ class GraphicEditor:
         self.temp_line_id = None # ID для временной линии (для отражения относительно прямой)
         self.transform_center_marker_id = None # ID для маркера центра преобразования
         self.current_transformation_mode = None # Для отслеживания текущего режима трансформации
+        self.bezier_control_points = [] # Для контрольных точек кривой Безье
+        self.bezier_preview_id = None # Для интерактивного предпросмотра кривой Безье
 
         self.canvas = tk.Canvas(master, width=800, height=600, bg="white", borderwidth=2, relief="groove")
         self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -253,6 +311,7 @@ class GraphicEditor:
         self.canvas.bind("<Button-1>", self.on_canvas_click)
         self.canvas.bind("<B1-Motion>", self.on_canvas_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_canvas_release)
+        self.canvas.bind("<Button-3>", self.on_canvas_right_click) # Привязываем ПКМ для завершения Безье
         self.dragging_object = False # Флаг для отслеживания перетаскивания
 
     def create_menu(self):
@@ -273,11 +332,13 @@ class GraphicEditor:
         primitives_menu.add_command(label="Отрезок", command=lambda: self.start_drawing("line"))
         primitives_menu.add_command(label="Крест (Kr)", command=lambda: self.start_drawing("cross"))
         primitives_menu.add_command(label="Флаг (Flag)", command=lambda: self.start_drawing("flag"))
+        primitives_menu.add_command(label="Кривая Безье", command=lambda: self.start_drawing("bezier_curve"))
 
         tmo_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="ТМО", menu=tmo_menu)
         tmo_menu.add_command(label="Пересечение ()", command=self.perform_intersection)
         tmo_menu.add_command(label="Разность ()", command=self.perform_difference)
+        tmo_menu.add_command(label="Объединение ()", command=self.perform_union) # Добавлено Объединение
 
         transform_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Преобразования", menu=transform_menu)
@@ -306,6 +367,7 @@ class GraphicEditor:
         tk.Button(toolbar, text="Отрезок", command=lambda: self.start_drawing("line")).pack(side=tk.LEFT, padx=2, pady=2)
         tk.Button(toolbar, text="Крест", command=lambda: self.start_drawing("cross")).pack(side=tk.LEFT, padx=2, pady=2)
         tk.Button(toolbar, text="Флаг", command=lambda: self.start_drawing("flag")).pack(side=tk.LEFT, padx=2, pady=2)
+        tk.Button(toolbar, text="Кривая Безье", command=lambda: self.start_drawing("bezier_curve")).pack(side=tk.LEFT, padx=2, pady=2)
         tk.Button(toolbar, text="Выбрать", command=self.select_object_mode).pack(side=tk.LEFT, padx=2, pady=2)
         tk.Button(toolbar, text="Удалить", command=self.delete_selected_object).pack(side=tk.LEFT, padx=2, pady=2)
         tk.Button(toolbar, text="Перемещение", command=self.start_translation).pack(side=tk.LEFT, padx=2, pady=2)
@@ -338,17 +400,23 @@ class GraphicEditor:
     def start_drawing(self, primitive_type):
         self.drawing_primitive = primitive_type
         self.temp_points = []
+        self.bezier_control_points = []
         self.selected_object = None # Снимаем выделение
         self.canvas.config(cursor="cross")
         self.clear_transform_marker()
         self.clear_temp_line()
+        self.clear_bezier_preview()
         self.current_transformation_mode = None # Сброс режима трансформации
+        if primitive_type == "bezier_curve":
+            messagebox.showinfo("Кривая Безье", "Кликайте на холсте, чтобы добавить контрольные точки (до 20). Нажмите правую кнопку мыши, чтобы завершить.")
+
 
     def select_object_mode(self):
         self.drawing_primitive = None
         self.canvas.config(cursor="arrow")
         self.clear_transform_marker()
         self.clear_temp_line()
+        self.clear_bezier_preview()
         self.current_transformation_mode = None # Сброс режима трансформации
 
     def delete_selected_object(self):
@@ -360,7 +428,14 @@ class GraphicEditor:
             self.redraw_all_objects() # Просто перерисовываем, чтобы убедиться в чистоте
 
     def on_canvas_click(self, event):
-        if self.drawing_primitive:
+        # Этот обработчик предназначен для левых кликов (Button-1)
+        if self.drawing_primitive == "bezier_curve":
+            if len(self.bezier_control_points) < 20:
+                self.bezier_control_points.append(Point(event.x, event.y))
+                self.draw_bezier_preview()
+            else:
+                messagebox.showwarning("Предупреждение", "Максимум 20 контрольных точек для кривой Безье.")
+        elif self.drawing_primitive:
             self.temp_points.append(Point(event.x, event.y))
             if self.drawing_primitive == "line":
                 if len(self.temp_points) == 2:
@@ -414,9 +489,10 @@ class GraphicEditor:
             if self.selected_object:
                 Transformations.mirror_vertical_line(self.selected_object, self.mirror_line_x)
                 self.redraw_all_objects()
-            self.current_transformation_mode = None
-            self.clear_temp_line()
-            self.canvas.config(cursor="arrow") # Возвращаем курсор
+            # Линия должна оставаться видимой, пока не будет запущено новое действие или выбран другой режим
+            # self.current_transformation_mode = None
+            # self.clear_temp_line()
+            # self.canvas.config(cursor="arrow") # Возвращаем курсор
         elif self.selected_object:
             # Если объект уже выбран, инициируем перемещение при клике
             self.start_drag_x = event.x
@@ -426,6 +502,23 @@ class GraphicEditor:
             # Попытка выбрать объект, если не в режиме рисования или трансформации
             self.select_object_at_click(event.x, event.y)
 
+    def on_canvas_right_click(self, event):
+        # Этот обработчик предназначен специально для правых кликов (Button-3)
+        if self.drawing_primitive == "bezier_curve":
+            if len(self.bezier_control_points) >= 2:
+                bezier = BezierCurve(self.bezier_control_points, self.current_color)
+                self.objects.append(bezier)
+                bezier.draw(self.canvas)
+                self.selected_object = bezier
+                self.highlight_selected_object()
+            else:
+                messagebox.showwarning("Ошибка", "Для построения кривой Безье необходимо минимум 2 контрольные точки.")
+            self.drawing_primitive = None
+            self.bezier_control_points = []
+            self.clear_bezier_preview()
+            self.canvas.config(cursor="arrow")
+
+
     def on_canvas_drag(self, event):
         if self.dragging_object and self.selected_object and self.current_transformation_mode == "translation":
             dx = event.x - self.start_drag_x
@@ -434,6 +527,13 @@ class GraphicEditor:
             self.start_drag_x = event.x
             self.start_drag_y = event.y
             self.redraw_all_objects() # Перерисовываем для плавного перемещения
+        elif self.drawing_primitive == "bezier_curve" and len(self.bezier_control_points) > 0:
+            # Обновляем последнюю контрольную точку для динамического предпросмотра, если это последний клик
+            # Обновляем только при перетаскивании левой кнопкой мыши
+            if event.num == 1:
+                self.bezier_control_points[-1] = Point(event.x, event.y)
+                self.draw_bezier_preview()
+
 
     def on_canvas_release(self, event):
         self.dragging_object = False
@@ -443,27 +543,55 @@ class GraphicEditor:
 
 
     def select_object_at_click(self, x, y):
-        # Простой выбор: ищем объект, ID которого совпадает с кликнутым
-        clicked_item = self.canvas.find_closest(x, y)
-        if clicked_item:
-            item_id = clicked_item[0]
+        # Получаем все элементы в области клика, а не только ближайший
+        # Это улучшает выбор перекрывающихся или тонких объектов
+        tolerance = 5 # Допуск в пикселях для области клика
+        items_at_click = self.canvas.find_overlapping(x - tolerance, y - tolerance, x + tolerance, y + tolerance)
+
+        found_object = None
+        # Ищем среди найденных элементов тот, который соответствует GraphicObject
+        # Приоритет отдается объектам, которые были нарисованы последними (т.е. имеют больший ID)
+        # Это может помочь в выборе "верхнего" объекта
+        items_at_click_sorted = sorted(list(items_at_click), reverse=True) # Сортируем по ID для выбора "верхнего"
+
+        for item_id in items_at_click_sorted:
             for obj in self.objects:
                 if obj.id == item_id:
-                    self.selected_object = obj
-                    self.highlight_selected_object()
-                    return
-        # Если ни один объект не был выбран, снимаем выделение
-        self.selected_object = None
-        self.redraw_all_objects() # Перерисовываем, чтобы снять старое выделение
+                    found_object = obj
+                    break # Найден объект, связанный с этим ID элемента
+            if found_object:
+                break # Найден объект, связанный с элементом в области клика
+
+        if found_object:
+            # Если выбран тот же объект, ничего не делаем, чтобы избежать мерцания
+            if self.selected_object == found_object:
+                return
+
+            self.selected_object = found_object
+            self.highlight_selected_object()
+        else:
+            # Если ни один объект не был найден в области клика, снимаем выделение
+            if self.selected_object:
+                self.selected_object = None
+                self.redraw_all_objects() # Перерисовываем, чтобы снять старое выделение
 
     def highlight_selected_object(self):
         # Сначала сбрасываем выделение со всех объектов, затем выделяем выбранный
         for obj in self.objects:
             if obj.id: # Убедимся, что объект уже отрисован
-                self.canvas.itemconfig(obj.id, outline=obj.color, width=2) # Возвращаем исходный цвет и толщину обводки
+                # Сбрасываем контур и толщину в зависимости от типа объекта
+                if isinstance(obj, (Cross, Flag)): # Эти используют 'outline'
+                    self.canvas.itemconfig(obj.id, outline=obj.color, width=2)
+                elif isinstance(obj, (Line, BezierCurve)): # Эти используют 'fill'
+                    self.canvas.itemconfig(obj.id, fill=obj.color, width=2)
 
         if self.selected_object:
-            self.canvas.itemconfig(self.selected_object.id, outline="red", width=3)
+            # Выделяем выбранный объект в зависимости от его типа
+            if isinstance(self.selected_object, (Cross, Flag)):
+                self.canvas.itemconfig(self.selected_object.id, outline="red", width=3)
+            elif isinstance(self.selected_object, (Line, BezierCurve)):
+                self.canvas.itemconfig(self.selected_object.id, fill="red", width=3)
+
             # Отображаем центр фигуры
             if self.selected_object.center:
                 self.draw_transform_marker(self.selected_object.center.x, self.selected_object.center.y, color="green")
@@ -472,6 +600,7 @@ class GraphicEditor:
         self.canvas.delete("all") # Очищаем холст
         self.clear_transform_marker() # Очищаем маркеры перед перерисовкой
         self.clear_temp_line() # Очищаем временную линию
+        self.clear_bezier_preview() # Очищаем предпросмотр Безье
         for obj in self.objects:
             obj.draw(self.canvas)
         if self.selected_object:
@@ -487,17 +616,24 @@ class GraphicEditor:
         self.clear_transform_marker()
         marker_size = 5
         self.transform_center_marker_id = self.canvas.create_oval(x - marker_size, y - marker_size,
-                                                                   x + marker_size, y + marker_size,
-                                                                   fill=color, outline=color)
+                                                                  x + marker_size, y + marker_size,
+                                                                  fill=color, outline=color)
         self.canvas.create_line(x - marker_size * 2, y, x + marker_size * 2, y, fill=color)
         self.canvas.create_line(x, y - marker_size * 2, x, y + marker_size * 2, fill=color)
 
     def perform_intersection(self):
-        messagebox.showinfo("ТМО: Пересечение", "Реализация пересечения сложных многоугольников требует продвинутых алгоритмов (например, Сазерленнда-Ходжмана). В данной версии не реализовано.")
+        # Более подробное сообщение о сложности реализации ТМО
+        messagebox.showinfo("ТМО: Пересечение", "Полная реализация пересечения для произвольных многоугольников и кривых Безье является сложной задачей, требующей продвинутых алгоритмов (например, алгоритм Вейлера-Атертона или Сазерленда-Ходжмана для полигонов, и специализированных методов для кривых Безье). В данной версии это не реализовано.")
         return None
 
     def perform_difference(self):
-        messagebox.showinfo("ТМО: Разность", "Реализация разности сложных многоугольников требует продвинутых алгоритмов. В данной версии не реализовано.")
+        # Более подробное сообщение о сложности реализации ТМО
+        messagebox.showinfo("ТМО: Разность", "Полная реализация разности для произвольных многоугольников и кривых Безье является сложной задачей, требующей продвинутых алгоритмов. В данной версии это не реализовано.")
+        return None
+
+    def perform_union(self):
+        # Более подробное сообщение о сложности реализации ТМО
+        messagebox.showinfo("ТМО: Объединение", "Полная реализация объединения для произвольных многоугольников и кривых Безье является сложной задачей, требующей продвинутых алгоритмов. В данной версии это не реализовано.")
         return None
 
 
@@ -530,7 +666,7 @@ class GraphicEditor:
             messagebox.showwarning("Ошибка", "Сначала выберите объект для отражения.")
             return
         self.current_transformation_mode = "mirror_vertical_line"
-        messagebox.showinfo("Зеркальное отражение (MV)", "Кликните на холсте, чтобы задать вертикальную линию отражения.")
+        messagebox.showinfo("Зеркальное отражение (MV)", "Кликните на холсте, чтобы задать вертикальную линию отражения. Линия будет видна до выбора другой операции.")
         self.canvas.config(cursor="sb_v_double_arrow")
 
     def draw_temp_vertical_line(self, x):
@@ -541,6 +677,46 @@ class GraphicEditor:
         if self.temp_line_id:
             self.canvas.delete(self.temp_line_id)
             self.temp_line_id = None
+
+    def draw_bezier_preview(self):
+        # Удаляем все временные элементы, связанные с Безье (контрольные точки, линии, кривая предпросмотра) по тегам
+        self.canvas.delete("bezier_preview_temp_control_point")
+        self.canvas.delete("bezier_preview_temp_control_line")
+        if self.bezier_preview_id:
+            self.canvas.delete(self.bezier_preview_id)
+            self.bezier_preview_id = None
+
+        if len(self.bezier_control_points) > 0:
+            # Рисуем контрольные точки в виде маленьких кругов
+            for p in self.bezier_control_points:
+                self.canvas.create_oval(p.x - 3, p.y - 3, p.x + 3, p.y + 3,
+                                        fill="blue", outline="blue", tags="bezier_preview_temp_control_point")
+
+            # Рисуем линии, соединяющие контрольные точки
+            if len(self.bezier_control_points) > 1:
+                coords_control_lines = []
+                for p in self.bezier_control_points:
+                    coords_control_lines.extend([p.x, p.y])
+                self.canvas.create_line(coords_control_lines, fill="gray", dash=(2,2), tags="bezier_preview_temp_control_line")
+
+            # Рисуем саму кривую Безье для предпросмотра
+            if len(self.bezier_control_points) >= 2:
+                # Создаем временный объект BezierCurve для получения точек кривой
+                temp_bezier = BezierCurve(self.bezier_control_points, self.current_color)
+                temp_bezier.calculate_curve_points()
+                if temp_bezier.points:
+                    coords_bezier_preview = []
+                    for p in temp_bezier.points:
+                        coords_bezier_preview.extend([p.x, p.y])
+                    self.bezier_preview_id = self.canvas.create_line(coords_bezier_preview, fill="red", width=2, smooth=True)
+
+    def clear_bezier_preview(self):
+        # Удаляем все временные элементы, связанные с Безье (контрольные точки, линии, кривая предпросмотра)
+        self.canvas.delete("bezier_preview_temp_control_point")
+        self.canvas.delete("bezier_preview_temp_control_line")
+        if self.bezier_preview_id:
+            self.canvas.delete(self.bezier_preview_id)
+            self.bezier_preview_id = None
 
 
 if __name__ == "__main__":

@@ -10,12 +10,12 @@ class Point:
         self.x = int(round(x)) # Координата X, округленная до целого
         self.y = int(round(y)) # Координата Y, округленная до целого
 
-    def to_homogeneous(self):
+    def to_uniform(self):
         # Преобразование точки в однородные координаты для выполнения матричных операций
         return np.array([self.x, self.y, 1])
 
     @staticmethod
-    def from_homogeneous(matrix):
+    def from_uniform(matrix):
         # Преобразование из однородных координат обратно в обычные пиксельные координаты
         if matrix.shape == (3,): # Если входная матрица представляет собой вектор (1D массив)
             if matrix[2] != 0: # Проверка на нулевой третий элемент для деления
@@ -33,11 +33,11 @@ class Point:
 
 # Базовый класс для всех графических фигур
 class GraphicObject:
-    def __init__(self, color="#000000", fill_color="#01FF417E"):
+    def __init__(self, color="#000000", fill_color="#FFFFFFFF"):
         self.points = [] # Список точек, определяющих фигуру
         self.color = color # Цвет контура фигуры (по умолчанию черный)
         self.fill_color = fill_color # Цвет заливки фигуры (по умолчанию полупрозрачный зеленый)
-        self.id = None # Идентификатор объекта на Canvas Tkinter (не используется для пиксельной отрисовки напрямую)
+        self.id = None
         self.center = Point(0, 0) # Центр фигуры (инициализируется в (0,0))
         self.calculate_center() # Вычисление центра фигуры при создании
 
@@ -50,9 +50,9 @@ class GraphicObject:
         # Применение матрицы преобразования ко всем точкам объекта
         new_points_homogeneous = []
         for p in self.points:
-            hom_coords = p.to_homogeneous() # Преобразование текущей точки в однородные координаты
+            hom_coords = p.to_uniform() # Преобразование текущей точки в однородные координаты
             transformed_hom_coords = np.dot(hom_coords, transform_matrix) # Умножение на матрицу преобразования
-            new_points_homogeneous.append(Point.from_homogeneous(transformed_hom_coords)) # Преобразование обратно из однородных координат
+            new_points_homogeneous.append(Point.from_uniform(transformed_hom_coords)) # Преобразование обратно из однородных координат
         self.points = new_points_homogeneous # Обновление списка точек объекта
         self.calculate_center() # Пересчет центра фигуры после преобразования
 
@@ -81,7 +81,7 @@ class Line(GraphicObject):
 
 # Класс для рисования креста (Kr)
 class Cross(GraphicObject):
-    def __init__(self, center_x, center_y, size, color="#000000", fill_color="#01FF417E"):
+    def __init__(self, center_x, center_y, size, color="#000000", fill_color="#FFFFFFFF"):
         super().__init__(color=color, fill_color=fill_color) # Вызов конструктора базового класса
         half_size = size / 2 # Половина размера креста
         quarter_size = size / 4 # Четверть размера креста
@@ -109,7 +109,7 @@ class Cross(GraphicObject):
 
 # Класс для рисования флага (Flag)
 class Flag(GraphicObject):
-    def __init__(self, base_x, base_y, width, height, color="#000000", fill_color="#01FF417E"):
+    def __init__(self, base_x, base_y, width, height, color="#000000", fill_color="#FFFFFFFF"):
         super().__init__(color=color, fill_color=fill_color) # Вызов конструктора базового класса
         # Определение точек, образующих многоугольник в форме флага
         self.points = [
@@ -158,9 +158,9 @@ class BezierCurve(GraphicObject):
         # Применение преобразования к контрольным точкам, затем пересчет кривой
         new_control_points_homogeneous = []
         for p in self.control_points:
-            hom_coords = p.to_homogeneous() # Преобразование контрольной точки в однородные координаты
+            hom_coords = p.to_uniform() # Преобразование контрольной точки в однородные координаты
             transformed_hom_coords = np.dot(hom_coords, transform_matrix) # Умножение на матрицу преобразования
-            new_control_points_homogeneous.append(Point.from_homogeneous(transformed_hom_coords)) # Преобразование обратно
+            new_control_points_homogeneous.append(Point.from_uniform(transformed_hom_coords)) # Преобразование обратно
         self.control_points = new_control_points_homogeneous # Обновление контрольных точек
         self.recalculate_curve_points() # Пересчет точек самой кривой
         self.calculate_center() # Пересчет центра кривой
@@ -439,7 +439,7 @@ class GraphicEditor:
         master.title("Графический редактор (Вариант 70)") # Установка заголовка окна
 
         self.current_color = "#000000" # Текущий цвет обводки (по умолчанию черный)
-        self.current_fill_color = "#01FF417E" # Текущий цвет заливки (по умолчанию полупрозрачный зеленый)
+        self.current_fill_color = "#FFFFFFFF" # Текущий цвет заливки (по умолчанию полупрозрачный зеленый)
         self.objects = [] # Список всех графических объектов на холсте
         self.selected_object = None # Выбранный в данный момент объект
         self.drawing_primitive = None # Текущий режим рисования (например, "line", "cross")
