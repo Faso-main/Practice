@@ -1,5 +1,6 @@
 """
-" Welcome to the world of misery and anguish - Python practice dir!! " 
+" Welcome to the world of misery and anguish - Python practice dir!!
+World of wonders " 
 """
 
 def python_forever_maker():
