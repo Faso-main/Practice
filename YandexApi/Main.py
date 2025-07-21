@@ -1,5 +1,14 @@
-import random
+import requests
 
-def generate_combinations(itr): return [{random.randint(0, 2):random.randint(0, 2)} for items in range(1,int(itr)+1,1)]
+API_KEY = '___________________-'
+url = "https://geocode-maps.yandex.ru/1.x/"
+params = {
+    'apikey': API_KEY,
+    'geocode': 'Москва',
+    'format': 'json'
+}
 
-for itr in generate_combinations(6): print(f'Комбинация: {itr}')
+response = requests.get(url, params=params)
+data = response.json()
+
+print(data['response']['GeoObjectCollection']['featureMember'][0]['GeoObject']['Point']['pos'])
