@@ -12,3 +12,5 @@ response = requests.get(url, params=params)
 data = response.json()
 
 print(data['response']['GeoObjectCollection']['featureMember'][0]['GeoObject']['Point']['pos'])
+
+HELP=f'Хочу нормальную апишку'
