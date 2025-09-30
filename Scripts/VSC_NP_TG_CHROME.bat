@@ -11,9 +11,7 @@ start notepad++
 start telegram
 
 :: Запуск Visual Studio Code
-cd /
-cd "C:\Users\Administaror\AppData\Local\Programs\Microsoft VS Code"
-.\Code.exe
+start code
 
 echo All applications started!
 timeout /t 3
