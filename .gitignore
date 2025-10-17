@@ -4,3 +4,4 @@ Py/test.py
 Test/
 *__pycache__/
 *venv/
+*.csv
