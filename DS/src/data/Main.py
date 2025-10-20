@@ -19,7 +19,7 @@ df_items.columns=['id_items','specification']
 # Split data
 df_items.to_csv(os.path.join('DS','src','data','split.csv'), index=False, encoding='utf-8', chunksize=100)
 
-df_split = df_items['id_items'].str.split(';', n=4,expand=True) # разделение с ограничением по количеству строк 
+df_split = df_items['id_items'].str.split(';',expand=True) # разделение с ограничением по количеству строк 
 df_split.columns = [f'id{itr}' for itr in range(1, len(df_split.columns)+1,1)]
 df_items = pd.concat([df_split, df_items['specification']], axis=1)
 
