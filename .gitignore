@@ -5,3 +5,5 @@ Test/
 *__pycache__/
 *venv/
 *.csv
+*.safetensors
+intent_classifier/
