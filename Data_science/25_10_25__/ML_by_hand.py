@@ -66,7 +66,7 @@ class IntentClassfier:
                 return_tensors="pt"
             )
     
-    def set_dataaset(self) -> Dataset: # подготовка датасета
+    def set_dataset(self) -> Dataset: # подготовка датасета
 
         texts = [itr[0] for itr in self.hashmap]
         labels = [itr[1] for itr in self.hashmap]
@@ -80,7 +80,7 @@ class IntentClassfier:
 
         set_dataset=Dataset.from_list(dataset)
 
-        tokenized_dataset = set_dataset.map(self.tokenize_function(),
+        tokenized_dataset = set_dataset.map(self.tokenize_function,
                                             batched=True)
         
         logger.info('Success : подготовка датасета')
@@ -101,9 +101,11 @@ class IntentClassfier:
 
         trainer=Trainer(model=self.model,
                         args=training_args,
-                        train_dataset=self.set_dataaset())
+                        train_dataset=self.set_dataset())
+        
         trainer.train()
         trainer.save_model()
+        logger.info('Success : обучение модели')
         return trainer
     
     def predict(self,text): # получение и вывод результата
@@ -112,19 +114,28 @@ class IntentClassfier:
                                padding=True,
                                truncation=True)
         
+        self.model.eval()
         with torch.no_grad():
-            outputs=self.model(**request)
-            probs=torch.softmax(outputs.logits, dim=1)
-            predicted_idx=torch.argmax(probs, dim=1).item()
-
-        reverse_map={v:k for k,v in self.label_map.items()}
-        return reverse_map[predicted_idx], probs[0][predicted_idx].item()
+                outputs = self.model(**request)
+                probs = torch.softmax(outputs.logits, dim=1)
+                predicted_idx = torch.argmax(probs, dim=1).item()
+                confidence = probs[0][predicted_idx].item()
+            
+        reverse_map = {v: k for k, v in self.label_map.items()}
+        predicted_label = reverse_map[predicted_idx]
+        
+        # Детальная информация о предсказании
+        all_probs = {reverse_map[i]: float(probs[0][i]) for i in range(len(reverse_map))}
+            
+        return predicted_label, confidence, all_probs
 
     
-Intent_for_practice=IntentClassfier(training_data)
+Intent_classifier=IntentClassfier(training_data)
+Intent_classifier.train()
 
 
 for question in ["где столовая?", "какой график работы?", "привет!"]:
-    intent, confidence = Intent_for_practice.predict(question)
-    print(f"'{question}' → {intent} ({confidence})")
+    intent, confidence, all_probs = Intent_classifier.predict(question)
+
+    logger.info(f"'{question}' → {intent} ({confidence})")
 
