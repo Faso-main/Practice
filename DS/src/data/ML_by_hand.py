@@ -2,7 +2,15 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trai
 import numpy as np
 from datasets import Dataset
 import pandas as pd
-import os, torch
+import os, torch, logging
+
+# Настраиваем логирование
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
 
 
 training_data = [
@@ -21,25 +29,19 @@ training_data = [
 ]
 
 class IntentClassfier:
-    def __init__(self, hashmap:list,epochs=5,model_name="DeepPavlov/rubert-base-cased"):
+    def __init__(self, hashmap:list,
+                 epochs=5,model_name="DeepPavlov/rubert-base-cased"):
         self.model_name=model_name
         self.tokenizer=AutoTokenizer.from_pretrained(model_name)
         self.model=None
         self.label_map={}
         self.hashmap=hashmap
         self.epochs=epochs
-        self.model_setup__data_preparation()
+        
+        self._model_setup()
 
-    def tokenize_function(self, examples):
-            return self.tokenizer(
-                examples['text'], 
-                padding=True, 
-                truncation=True, 
-                max_length=64,  # Уменьшаем для маленького датасета
-                return_tensors="pt"
-            )
 
-    def model_setup__data_preparation(self): # инициализаци модели и data prep
+    def _model_setup(self): # инициализаци модели
         texts = [itr[0] for itr in self.hashmap]
         labels = [itr[1] for itr in self.hashmap]
 
@@ -52,6 +54,23 @@ class IntentClassfier:
             num_labels=len(unique_labels)
         )
 
+        logger.info('Success : инициализаци')
+        
+    
+    def tokenize_function(self, examples):
+        return self.tokenizer(
+                examples['text'], 
+                padding=True, 
+                truncation=True, 
+                max_length=64,  # уменьшаем для маленького датасета
+                return_tensors="pt"
+            )
+    
+    def set_dataaset(self) -> Dataset: # подготовка датасета
+
+        texts = [itr[0] for itr in self.hashmap]
+        labels = [itr[1] for itr in self.hashmap]
+        
         dataset = []
         for text, label in zip(texts, labels):
             dataset.append({
@@ -61,12 +80,12 @@ class IntentClassfier:
 
         set_dataset=Dataset.from_list(dataset)
 
-        tokenized_dataset = set_dataset.map(self.tokenizer(
-                examples=['text'], padding=True, 
-                truncation=True, max_length=128
-            ), batched=True)
-
+        tokenized_dataset = set_dataset.map(self.tokenize_function(),
+                                            batched=True)
+        
+        logger.info('Success : подготовка датасета')
         return tokenized_dataset
+        
     
 
     def train(self): # обучение модели
@@ -82,7 +101,7 @@ class IntentClassfier:
 
         trainer=Trainer(model=self.model,
                         args=training_args,
-                        train_dataset=self.model_setup__data_preparation())
+                        train_dataset=self.set_dataaset())
         trainer.train()
         trainer.save_model()
         return trainer

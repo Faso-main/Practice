@@ -3,6 +3,15 @@ import numpy as np
 from datasets import Dataset
 import torch
 import os
+import logging
+
+# Настраиваем логирование
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
 
 # Добавляем if __name__ для multiprocessing
 if __name__ == "__main__":
@@ -38,7 +47,7 @@ if __name__ == "__main__":
         
         def _initialize_model(self):
             """Инициализация модели"""
-            print("🔧 Инициализируем модель...")
+            logger.info("🔧 Инициализируем модель...")
             texts = [itr[0] for itr in self.hashmap]
             labels = [itr[1] for itr in self.hashmap]
             
@@ -46,20 +55,20 @@ if __name__ == "__main__":
             unique_labels = sorted(list(set(labels)))
             self.label_map = {label: index for index, label in enumerate(unique_labels)}
             
-            print(f"📊 Статистика данных:")
-            print(f"   Всего примеров: {len(texts)}")
-            print(f"   Уникальные классы: {unique_labels}")
-            print(f"   Распределение классов:")
+            logger.info("📊 Статистика данных:")
+            logger.info(f"   Всего примеров: {len(texts)}")
+            logger.info(f"   Уникальные классы: {unique_labels}")
+            logger.info(f"   Распределение классов:")
             for label in unique_labels:
                 count = labels.count(label)
-                print(f"     {label}: {count} примеров ({count/len(labels)*100:.1f}%)")
+                logger.info(f"     {label}: {count} примеров ({count/len(labels)*100:.1f}%)")
             
             # Используем легкую модель для быстрого тестирования
             self.model = AutoModelForSequenceClassification.from_pretrained(
                 self.model_name,
                 num_labels=len(unique_labels)
             )
-            print("✅ Модель инициализирована")
+            logger.info("✅ Модель инициализирована")
         
         def tokenize_function(self, examples):
             """Функция токенизации"""
@@ -83,7 +92,7 @@ if __name__ == "__main__":
             })
             
             tokenized_dataset = dataset.map(self.tokenize_function, batched=True)
-            print(f"✅ Данные подготовлены: {len(tokenized_dataset)} примеров")
+            logger.info(f"✅ Данные подготовлены: {len(tokenized_dataset)} примеров")
             return tokenized_dataset
         
         def train(self):
@@ -114,14 +123,14 @@ if __name__ == "__main__":
                 train_dataset=tokenized_dataset,
             )
             
-            print("🚀 Начинаем обучение...")
+            logger.info("🚀 Начинаем обучение...")
             train_result = trainer.train()
             trainer.save_model()
             self.is_trained = True
             
-            print("📈 Результаты обучения:")
-            print(f"   Final loss: {train_result.metrics['train_loss']:.4f}")
-            print("✅ Обучение завершено!")
+            logger.info("📈 Результаты обучения:")
+            logger.info(f"   Final loss: {train_result.metrics['train_loss']:.4f}")
+            logger.info("✅ Обучение завершено!")
             return trainer
         
         def predict(self, text):
@@ -153,14 +162,14 @@ if __name__ == "__main__":
             return predicted_label, confidence, all_probs
 
     # Использование
-    print("🎯 ЗАПУСК КЛАССИФИКАТОРА НАМЕРЕНИЙ")
-    print("=" * 50)
+    logger.info("🎯 ЗАПУСК КЛАССИФИКАТОРА НАМЕРЕНИЙ")
+    logger.info("=" * 50)
     
     classifier = IntentClassifier(training_data, epochs=15)  # Увеличиваем эпохи
     classifier.train()
     
-    print("\n🧪 ТЕСТИРУЕМ МОДЕЛЬ:")
-    print("=" * 50)
+    logger.info("\n🧪 ТЕСТИРУЕМ МОДЕЛЬ:")
+    logger.info("=" * 50)
     
     test_questions = [
         "где столовая?", 
@@ -174,10 +183,10 @@ if __name__ == "__main__":
     for question in test_questions:
         try:
             intent, confidence, all_probs = classifier.predict(question)
-            print(f"\n📝 Вопрос: '{question}'")
-            print(f"🎯 Предсказание: {intent} (уверенность: {confidence:.3f})")
-            print(f"📊 Все вероятности:")
+            logger.info(f"\n📝 Вопрос: '{question}'")
+            logger.info(f"🎯 Предсказание: {intent} (уверенность: {confidence:.3f})")
+            logger.info(f"📊 Все вероятности:")
             for label, prob in sorted(all_probs.items(), key=lambda x: x[1], reverse=True):
-                print(f"   {label}: {prob:.3f}")
+                logger.info(f"   {label}: {prob:.3f}")
         except Exception as e:
-            print(f"❌ Ошибка для '{question}': {e}")
+            logger.error(f"❌ Ошибка для '{question}': {e}")
