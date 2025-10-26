@@ -29,8 +29,11 @@ training_data = [
 ]
 
 class IntentClassfier:
-    def __init__(self, hashmap:list,
-                 epochs=5,model_name="DeepPavlov/rubert-base-cased"):
+    def __init__(self, 
+                 hashmap:list,
+                 epochs=5,
+                 model_name="DeepPavlov/rubert-base-cased"):
+        
         self.model_name=model_name
         self.tokenizer=AutoTokenizer.from_pretrained(model_name)
         self.model=None
@@ -137,5 +140,5 @@ Intent_classifier.train()
 for question in ["где столовая?", "какой график работы?", "привет!"]:
     intent, confidence, all_probs = Intent_classifier.predict(question)
 
-    logger.info(f"'{question}' → {intent} ({confidence})")
+    logger.info(f"'{question}' -> {intent} ({confidence})")
 
