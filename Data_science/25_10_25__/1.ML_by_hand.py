@@ -3,7 +3,7 @@ import numpy as np
 from datasets import Dataset
 import pandas as pd
 import os, torch, logging
-from data import *
+from data1 import *
 
 # Настраиваем логирование
 logging.basicConfig(
