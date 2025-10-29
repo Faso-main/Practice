@@ -3,6 +3,7 @@ import numpy as np
 from datasets import Dataset
 import pandas as pd
 import os, torch, logging
+from data import intent_data
 
 # Настраиваем логирование
 logging.basicConfig(
@@ -11,22 +12,6 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
-
-
-training_data = [
-            ("где находится деканат", "location"),
-            ("когда работает библиотека", "time"),
-            ("телефон деканата", "contacts"),
-            ("нужна справка об обучении", "documents"),
-            ("сколько стоит обучение", "payment"),
-            ("как подать заявление", "procedure"),
-            ("что такое КТ", "definition"),
-            ("привет", "greeting"),
-            ("пока", "greeting"),
-            ("какие документы нужны для поступления", "documents"),
-            ("график работы столовой", "time"),
-            ("адрес общежития", "location"),
-]
 
 class IntentClassfier:
     def __init__(self, 
@@ -135,11 +120,11 @@ class IntentClassfier:
 
 if __name__ == "__main__":
 
-    Intent_classifier=IntentClassfier(training_data)
+    Intent_classifier=IntentClassfier(intent_data)
     Intent_classifier.train()
 
     for question in ["где столовая?", "какой график работы?", "привет!"]:
         intent, confidence, all_probs = Intent_classifier.predict(question)
 
-        logger.info(f"'{question}' -> {intent} ({confidence})")
+        logger.info(f"'{question}' -> {intent} ({confidence:.2f})")
 
