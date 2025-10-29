@@ -3,7 +3,7 @@ import numpy as np
 from datasets import Dataset
 import pandas as pd
 import os, torch, logging
-from data import intent_data
+from data import *
 
 # Настраиваем логирование
 logging.basicConfig(
@@ -120,7 +120,7 @@ class IntentClassfier:
 
 if __name__ == "__main__":
 
-    Intent_classifier=IntentClassfier(intent_data)
+    Intent_classifier=IntentClassfier(intent_data_1000)
     Intent_classifier.train()
 
     for question in ["где столовая?", "какой график работы?", "привет!"]:
