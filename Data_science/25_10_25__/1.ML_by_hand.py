@@ -132,13 +132,14 @@ class IntentClassfier:
             
         return predicted_label, confidence, all_probs
 
-    
-Intent_classifier=IntentClassfier(training_data)
-Intent_classifier.train()
 
+if __name__ == "__main__":
 
-for question in ["где столовая?", "какой график работы?", "привет!"]:
-    intent, confidence, all_probs = Intent_classifier.predict(question)
+    Intent_classifier=IntentClassfier(training_data)
+    Intent_classifier.train()
 
-    logger.info(f"'{question}' -> {intent} ({confidence})")
+    for question in ["где столовая?", "какой график работы?", "привет!"]:
+        intent, confidence, all_probs = Intent_classifier.predict(question)
+
+        logger.info(f"'{question}' -> {intent} ({confidence})")
 
