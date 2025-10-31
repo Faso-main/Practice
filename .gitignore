@@ -7,3 +7,4 @@ Test/
 *.csv
 *.safetensors
 intent_classifier/
+*.pt

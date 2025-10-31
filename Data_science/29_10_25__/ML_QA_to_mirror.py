@@ -1,118 +1,240 @@
-from transformers import AutoTokenizer, AutoModelForQuestionAnswering, TrainingArguments, Trainer
-import torch
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
 from datasets import Dataset
+import torch
+import logging
 
-# 1. Данные для обучения (упрощенная структура)
-raw_data = [
-    {
-        'context': 'Библиотека работает с 9 утра до 6 вечера.',
-        'question': 'Когда работает библиотека?',
-        'answer': 'с 9 утра до 6 вечера'  
-    },
-    {
-        'context': 'Деканат находится на третьем этаже.',
-        'question': 'Где находится деканат?', 
-        'answer': 'на третьем этаже'
-    }
-]
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-# 2. Инициализация модели
-tokenizer = AutoTokenizer.from_pretrained("bert-base-multilingual-cased")
-model = AutoModelForQuestionAnswering.from_pretrained("bert-base-multilingual-cased")
-
-# 3. Подготовка данных с автоматическим вычислением позиций
-def prepare_train_features(examples):
-    # Добавляем answer_start автоматически
-    for i in range(len(examples['context'])):
-        context = examples['context'][i]
-        answer = examples['answer'][i]
-        start_char = context.find(answer)
-        if start_char == -1:
-            raise ValueError(f"Ответ '{answer}' не найден в контексте: '{context}'")
-        examples.setdefault('answer_start', []).append(start_char)
+class QuestionClassifier:
+    def __init__(self, model_name="DeepPavlov/rubert-base-cased"):
+        self.model_name = model_name
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = None
+        self.answer_map = {}  # маппинг: класс -> ответ
+        self.is_trained = False
     
-    # Токенизация
-    tokenized = tokenizer(
-        examples['question'],
-        examples['context'], 
-        truncation=True,
-        padding=True,
-        max_length=256,
-        return_offsets_mapping=True  # для корректного mapping токенов
-    )
-    
-    # Конвертируем символьные позиции в токенные
-    start_positions = []
-    end_positions = []
-    
-    for i, offset_mapping in enumerate(tokenized['offset_mapping']):
-        start_char = examples['answer_start'][i]
-        end_char = start_char + len(examples['answer'][i])
+    def prepare_data(self, qa_data):
+        questions = []
+        answers = []
         
-        # Ищем start и end токены
-        start_token = None
-        end_token = None
+        for item in qa_data:
+            questions.append(item['question'])
+            answers.append(item['answer'])
         
-        for token_idx, (start, end) in enumerate(offset_mapping):
-            if start <= start_char < end:
-                start_token = token_idx
-            if start < end_char <= end:
-                end_token = token_idx
-                break
+        # Создаем маппинг уникальных ответов
+        unique_answers = list(set(answers))
+        self.answer_map = {i: answer for i, answer in enumerate(unique_answers)}
+        self.label_to_answer = {answer: i for i, answer in enumerate(unique_answers)}
         
-        # Если не нашли, используем первый/последний токен
-        start_positions.append(start_token if start_token is not None else 0)
-        end_positions.append(end_token if end_token is not None else len(offset_mapping)-1)
+        # Конвертируем ответы в числовые метки
+        labels = [self.label_to_answer[answer] for answer in answers]
+        
+        return questions, labels
     
-    tokenized['start_positions'] = start_positions
-    tokenized['end_positions'] = end_positions
-    
-    # Убираем offsets_mapping т.к. он не нужен для обучения
-    tokenized.pop('offset_mapping')
-    
-    return tokenized
-
-# 4. Создаем датасет и обрабатываем
-dataset = Dataset.from_list(raw_data)
-tokenized_dataset = dataset.map(prepare_train_features, batched=True)
-
-# 5. Обучение
-training_args = TrainingArguments(
-    output_dir="./qa_model",
-    num_train_epochs=3,
-    per_device_train_batch_size=8,
-    logging_steps=10,
-    save_steps=100
-)
-
-trainer = Trainer(
-    model=model,
-    args=training_args,
-    train_dataset=tokenized_dataset
-)
-
-trainer.train()
-
-# 6. Использование
-def answer_question(context, question):
-    inputs = tokenizer(question, context, return_tensors='pt', truncation=True, max_length=256)
-    
-    with torch.no_grad():
-        outputs = model(**inputs)
-        start_logits = outputs.start_logits
-        end_logits = outputs.end_logits
+    def train(self, qa_data, epochs=5):
+        logger.info("Подготовка данных...")
+        questions, labels = self.prepare_data(qa_data)
         
-        start_idx = torch.argmax(start_logits)
-        end_idx = torch.argmax(end_logits)
+        # Создаем модель
+        self.model = AutoModelForSequenceClassification.from_pretrained(
+            self.model_name,
+            num_labels=len(self.answer_map)
+        )
         
-        answer_tokens = inputs['input_ids'][0][start_idx:end_idx+1]
-        answer = tokenizer.decode(answer_tokens, skip_special_tokens=True)
+        # Токенизация
+        def tokenize_function(examples):
+            return self.tokenizer(examples['text'], padding=True, truncation=True, max_length=128)
         
-    return answer
+        dataset = Dataset.from_dict({
+            'text': questions,
+            'label': labels
+        })
+        
+        tokenized_dataset = dataset.map(tokenize_function, batched=True)
+        
+        # Обучение
+        training_args = TrainingArguments(
+            output_dir="./classifier",
+            num_train_epochs=epochs,
+            per_device_train_batch_size=8,
+            save_steps=500,
+            logging_steps=100,
+        )
+        
+        trainer = Trainer(
+            model=self.model,
+            args=training_args,
+            train_dataset=tokenized_dataset,
+        )
+        
+        logger.info("Начало обучения...")
+        trainer.train()
+        self.is_trained = True
+        logger.info("Обучение завершено!")
+        
+        return trainer
+    
+    def get_answer(self, question):
+        """Получить ответ на вопрос"""
+        if not self.is_trained:
+            return "Модель не обучена"
+        
+        inputs = self.tokenizer(question, return_tensors='pt', padding=True, truncation=True, max_length=128)
+        
+        self.model.eval()
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+            probs = torch.softmax(outputs.logits, dim=1)
+            predicted_idx = torch.argmax(probs, dim=1).item()
+            confidence = probs[0][predicted_idx].item()
+        
+        answer = self.answer_map[predicted_idx]
+        return answer, confidence
 
-# Тест
-context = "Библиотека работает с 9 утра до 6 вечера."
-question = "Когда работает библиотека?"
-result = answer_question(context, question)
-print(f"Вопрос: {question}")
-print(f"Ответ: {result}")
+
+if __name__ == "__main__":
+    # Расширенные данные: 100+ вопросов-ответов
+    qa_data = [
+        # Расписание работы (15 примеров)
+        {'question': 'Когда работает библиотека?', 'answer': 'Библиотека работает с 9:00 до 18:00'},
+        {'question': 'В какое время открыта библиотека?', 'answer': 'Библиотека работает с 9:00 до 18:00'},
+        {'question': 'Какой график работы библиотеки?', 'answer': 'Библиотека работает с 9:00 до 18:00'},
+        {'question': 'Со скольки до скольки библиотека?', 'answer': 'Библиотека работает с 9:00 до 18:00'},
+        {'question': 'Часы работы библиотеки', 'answer': 'Библиотека работает с 9:00 до 18:00'},
+        {'question': 'Библиотека когда открывается?', 'answer': 'Библиотека работает с 9:00 до 18:00'},
+        {'question': 'Когда закрывается библиотека?', 'answer': 'Библиотека работает с 9:00 до 18:00'},
+        {'question': 'До скольки работает библиотека?', 'answer': 'Библиотека работает с 9:00 до 18:00'},
+        {'question': 'Режим работы библиотеки', 'answer': 'Библиотека работает с 9:00 до 18:00'},
+        {'question': 'Библиотека открыта в субботу?', 'answer': 'Библиотека работает с 9:00 до 18:00, кроме воскресенья'},
+        {'question': 'Работает ли библиотека в выходные?', 'answer': 'Библиотека работает с 9:00 до 18:00, кроме воскресенья'},
+        {'question': 'Библиотека в воскресенье открыта?', 'answer': 'Библиотека работает с 9:00 до 18:00, кроме воскресенья'},
+        {'question': 'График читального зала', 'answer': 'Читальный зал работает с 8:00 до 20:00'},
+        {'question': 'Когда работает читальный зал?', 'answer': 'Читальный зал работает с 8:00 до 20:00'},
+        {'question': 'Часы работы читалки', 'answer': 'Читальный зал работает с 8:00 до 20:00'},
+
+        # Местоположение деканата (15 примеров)
+        {'question': 'Где находится деканат?', 'answer': 'Деканат на 3 этаже главного корпуса'},
+        {'question': 'Где можно найти деканат?', 'answer': 'Деканат на 3 этаже главного корпуса'},
+        {'question': 'Местоположение деканата', 'answer': 'Деканат на 3 этаже главного корпуса'},
+        {'question': 'Адрес деканата', 'answer': 'Деканат на 3 этаже главного корпуса'},
+        {'question': 'Деканат где искать?', 'answer': 'Деканат на 3 этаже главного корпуса'},
+        {'question': 'Как пройти в деканат?', 'answer': 'Деканат на 3 этаже главного корпуса'},
+        {'question': 'Кабинет деканата', 'answer': 'Деканат на 3 этаже главного корпуса'},
+        {'question': 'На каком этаже деканат?', 'answer': 'Деканат на 3 этаже главного корпуса'},
+        {'question': 'Деканат в каком корпусе?', 'answer': 'Деканат на 3 этаже главного корпуса'},
+        {'question': 'Где располагается деканат?', 'answer': 'Деканат на 3 этаже главного корпуса'},
+        {'question': 'Деканат факультета где?', 'answer': 'Деканат на 3 этаже главного корпуса'},
+        {'question': 'Местонахождение деканата', 'answer': 'Деканат на 3 этаже главного корпуса'},
+        {'question': 'Деканат на каком этаже находится?', 'answer': 'Деканат на 3 этаже главного корпуса'},
+        {'question': 'Где деканат факультета?', 'answer': 'Деканат на 3 этаже главного корпуса'},
+        {'question': 'Координаты деканата', 'answer': 'Деканат на 3 этаже главного корпуса'},
+
+        # Стоимость обучения (15 примеров)
+        {'question': 'Сколько стоит обучение?', 'answer': 'Стоимость обучения 150000 рублей в год'},
+        {'question': 'Какая цена за обучение?', 'answer': 'Стоимость обучения 150000 рублей в год'},
+        {'question': 'Сколько стоит учеба?', 'answer': 'Стоимость обучения 150000 рублей в год'},
+        {'question': 'Цена обучения', 'answer': 'Стоимость обучения 150000 рублей в год'},
+        {'question': 'Стоимость учебы в год', 'answer': 'Стоимость обучения 150000 рублей в год'},
+        {'question': 'Обучение сколько стоит?', 'answer': 'Стоимость обучения 150000 рублей в год'},
+        {'question': 'Какова цена за обучение?', 'answer': 'Стоимость обучения 150000 рублей в год'},
+        {'question': 'Год обучения стоимость', 'answer': 'Стоимость обучения 150000 рублей в год'},
+        {'question': 'Сколько платить за учебу?', 'answer': 'Стоимость обучения 150000 рублей в год'},
+        {'question': 'Цена за год обучения', 'answer': 'Стоимость обучения 150000 рублей в год'},
+        {'question': 'Стоимость образовательных услуг', 'answer': 'Стоимость обучения 150000 рублей в год'},
+        {'question': 'Обучение по какой цене?', 'answer': 'Стоимость обучения 150000 рублей в год'},
+        {'question': 'Какую сумму за обучение?', 'answer': 'Стоимость обучения 150000 рублей в год'},
+        {'question': 'Год учебы сколько стоит?', 'answer': 'Стоимость обучения 150000 рублей в год'},
+        {'question': 'Цена образовательных услуг', 'answer': 'Стоимость обучения 150000 рублей в год'},
+
+        # Общежитие (15 примеров)
+        {'question': 'Где находится общежитие?', 'answer': 'Общежитие по адресу ул. Студенческая, 15'},
+        {'question': 'Адрес общежития', 'answer': 'Общежитие по адресу ул. Студенческая, 15'},
+        {'question': 'Как добраться до общежития?', 'answer': 'Общежитие по адресу ул. Студенческая, 15'},
+        {'question': 'Местоположение общежития', 'answer': 'Общежитие по адресу ул. Студенческая, 15'},
+        {'question': 'Где общежитие для студентов?', 'answer': 'Общежитие по адресу ул. Студенческая, 15'},
+        {'question': 'Общежитие где расположено?', 'answer': 'Общежитие по адресу ул. Студенческая, 15'},
+        {'question': 'Адрес студенческого общежития', 'answer': 'Общежитие по адресу ул. Студенческая, 15'},
+        {'question': 'Где находится студенческое общежитие?', 'answer': 'Общежитие по адресу ул. Студенческая, 15'},
+        {'question': 'Общежитие в каком районе?', 'answer': 'Общежитие по адресу ул. Студенческая, 15'},
+        {'question': 'Как найти общежитие?', 'answer': 'Общежитие по адресу ул. Студенческая, 15'},
+        {'question': 'Где жилье для студентов?', 'answer': 'Общежитие по адресу ул. Студенческая, 15'},
+        {'question': 'Место общежития', 'answer': 'Общежитие по адресу ул. Студенческая, 15'},
+        {'question': 'Общежитие номер 1 где?', 'answer': 'Общежитие по адресу ул. Студенческая, 15'},
+        {'question': 'Где кампус?', 'answer': 'Общежитие по адресу ул. Студенческая, 15'},
+        {'question': 'Студенческий городок адрес', 'answer': 'Общежитие по адресу ул. Студенческая, 15'},
+
+        # Стипендия (15 примеров)
+        {'question': 'Какая стипендия?', 'answer': 'Размер стипендии 3000 рублей в месяц'},
+        {'question': 'Сколько составляет стипендия?', 'answer': 'Размер стипендии 3000 рублей в месяц'},
+        {'question': 'Размер стипендии', 'answer': 'Размер стипендии 3000 рублей в месяц'},
+        {'question': 'Стипендия сколько?', 'answer': 'Размер стипендии 3000 рублей в месяц'},
+        {'question': 'Какая выплата стипендии?', 'answer': 'Размер стипендии 3000 рублей в месяц'},
+        {'question': 'Стипендия в месяц', 'answer': 'Размер стипендии 3000 рублей в месяц'},
+        {'question': 'Сколько платят стипендию?', 'answer': 'Размер стипендии 3000 рублей в месяц'},
+        {'question': 'Величина стипендии', 'answer': 'Размер стипендии 3000 рублей в месяц'},
+        {'question': 'Стипендия какая сумма?', 'answer': 'Размер стипендии 3000 рублей в месяц'},
+        {'question': 'Ежемесячная стипендия', 'answer': 'Размер стипендии 3000 рублей в месяц'},
+        {'question': 'Сколько получают стипендию?', 'answer': 'Размер стипендии 3000 рублей в месяц'},
+        {'question': 'Размер выплат по стипендии', 'answer': 'Размер стипендии 3000 рублей в месяц'},
+        {'question': 'Стипендия в цифрах', 'answer': 'Размер стипендии 3000 рублей в месяц'},
+        {'question': 'Какая стипендия у студентов?', 'answer': 'Размер стипендии 3000 рублей в месяц'},
+        {'question': 'Сумма стипендии', 'answer': 'Размер стипендии 3000 рублей в месяц'},
+
+        # Расписание занятий (15 примеров)
+        {'question': 'Где посмотреть расписание?', 'answer': 'Расписание на сайте университета и на стендах'},
+        {'question': 'Расписание занятий где?', 'answer': 'Расписание на сайте университета и на стендах'},
+        {'question': 'Где найти расписание?', 'answer': 'Расписание на сайте университета и на стендах'},
+        {'question': 'Расписание пар где смотреть?', 'answer': 'Расписание на сайте университета и на стендах'},
+        {'question': 'Где висит расписание?', 'answer': 'Расписание на сайте университета и на стендах'},
+        {'question': 'Расписание где посмотреть?', 'answer': 'Расписание на сайте университета и на стендах'},
+        {'question': 'Где узнать расписание?', 'answer': 'Расписание на сайте университета и на стендах'},
+        {'question': 'Расписание занятий где найти?', 'answer': 'Расписание на сайте университета и на стендах'},
+        {'question': 'Где смотреть расписание пар?', 'answer': 'Расписание на сайте университета и на стендах'},
+        {'question': 'Расписание где расположено?', 'answer': 'Расписание на сайте университета и на стендах'},
+        {'question': 'Где вывешено расписание?', 'answer': 'Расписание на сайте университета и на стендах'},
+        {'question': 'Расписание где можно посмотреть?', 'answer': 'Расписание на сайте университета и на стендах'},
+        {'question': 'Где находится расписание?', 'answer': 'Расписание на сайте университета и на стендах'},
+        {'question': 'Расписание где искать?', 'answer': 'Расписание на сайте университета и на стендах'},
+        {'question': 'Где посмотреть график занятий?', 'answer': 'Расписание на сайте университета и на стендах'},
+
+        # Контакты (10 примеров)
+        {'question': 'Какой телефон деканата?', 'answer': 'Телефон деканата: +7 (846) 207-88-88'},
+        {'question': 'Номер телефона деканата', 'answer': 'Телефон деканата: +7 (846) 207-88-88'},
+        {'question': 'Телефон деканата какой?', 'answer': 'Телефон деканата: +7 (846) 207-88-88'},
+        {'question': 'Контакты деканата', 'answer': 'Телефон деканата: +7 (846) 207-88-88'},
+        {'question': 'Как позвонить в деканат?', 'answer': 'Телефон деканата: +7 (846) 207-88-88'},
+        {'question': 'Телефон для связи с деканатом', 'answer': 'Телефон деканата: +7 (846) 207-88-88'},
+        {'question': 'Номер деканата', 'answer': 'Телефон деканата: +7 (846) 207-88-88'},
+        {'question': 'Какой номер у деканата?', 'answer': 'Телефон деканата: +7 (846) 207-88-88'},
+        {'question': 'Телефонный номер деканата', 'answer': 'Телефон деканата: +7 (846) 207-88-88'},
+        {'question': 'Контактный телефон деканата', 'answer': 'Телефон деканата: +7 (846) 207-88-88'}
+    ]
+    
+    logger.info(f"Загружено {len(qa_data)} примеров для обучения")
+    
+    # Инициализация и обучение
+    classifier = QuestionClassifier()
+    classifier.train(qa_data, epochs=5)
+    
+    # Тестирование
+    test_questions = [
+        "Когда работает библиотека?",
+        "Где находится деканат?", 
+        "Сколько стоит учеба?",
+        "В какое время открыта библиотека?",
+        "Какой график работы библиотеки?",
+        "Где общежитие?",
+        "Какая стипендия?",
+        "Где посмотреть расписание?",
+        "Какой телефон деканата?",
+        "Сколько составляет стипендия?"
+    ]
+    
+    logger.info("ТЕСТИРОВАНИЕ МОДЕЛИ")
+    
+    for question in test_questions:
+        answer, confidence = classifier.get_answer(question)
+        logger.info(f"ВОПРОС: {question}")
+        logger.info(f"ОТВЕТ: {answer}")
+        logger.info(f"УВЕРЕННОСТЬ: {confidence:.3f}")
