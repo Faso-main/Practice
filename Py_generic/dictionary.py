@@ -35,6 +35,29 @@ print(f'Target_dict: {dict_snippet}')
 dict_snippet.clear() # очистка
 print(f'Target_dict: {dict_snippet}')
 
+#______________________________________________________________________________
 
+from collections import defaultdict
 
+# Автоматическое создание значений для отсутствующих ключей
+words_dict = defaultdict(int)
+hashmap = [f'str_{itr}' for itr in range(1,6,1)]
+
+for itr in hashmap: words_dict[itr] += 1
+# defaultdict(<class 'int'>, {'itr1': 1, 'itr2': 1, 'itr3': 1})
+print(words_dict)
+
+try: 
+    dict_hashmap={itr: f'str_{itr}' for itr in range(1,6,1)}
+    key=1
+    value='str1'
+    
+    dict_hashmap.setdefault(key, []).append(value)
+except: pass
+finally: print(f'Target_dict: {dict_hashmap}')
+
+dict_hashmap={itr: f'str_{itr}' for itr in range(1,6,1)}
+last_key=int(list(dict_hashmap.keys())[-1]) # последний ключ
+dict_hashmap[last_key+1]=f'str_{last_key+1}' # добавление, смотря на ключ
+print(f'Target_dict: {dict_hashmap}')
 
