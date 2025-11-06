@@ -9,6 +9,9 @@ str_array=[str(itr) for itr in range(1,6,1)]
 dict_snippet1={k:v for (k,v) in zip(integers_array,str_array)}
 #print(dict_snippet1)
 
+test_dict={num:f'{num}' for num in range(1,6,1)}
+#print(f'Result: {test_dict}')
+
 dict_snippet2=dict(zip(integers_array,str_array))
 #print(dict_snippet2)
 
@@ -22,4 +25,4 @@ hashmap='str1'
 nested_dict_snippet={
     itr:{x: itr+x for x in hashmap} for itr in hashmap
 }
-print(f'nested_dict_snippet: {nested_dict_snippet}')
+#print(f'nested_dict_snippet: {nested_dict_snippet}')
