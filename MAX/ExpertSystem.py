@@ -2,7 +2,7 @@ import asyncio
 from maxapi import Bot, Dispatcher, F
 from maxapi.types import MessageCreated
 
-bot = Bot('тут_ваш_токен')
+bot = Bot('token________________________________')
 dp = Dispatcher()
 
 # Хранение состояния опроса для каждого пользователя в памяти
@@ -67,5 +67,8 @@ async def handle_message(event: MessageCreated):
 async def main():
     await dp.start_polling(bot)
 
-if __name__ == "__main__":
-    asyncio.run(main())
+if __name__ == '__main__':
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt: print('Остановлено в ручную')
+    except Exception as e: print(f'Ошибка вида: {e}')
