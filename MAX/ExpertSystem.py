@@ -2,7 +2,7 @@ import asyncio
 from maxapi import Bot, Dispatcher, F
 from maxapi.types import MessageCreated
 
-bot = Bot('token________________________________')
+bot = Bot('TOKEN')
 dp = Dispatcher()
 
 # Хранение состояния опроса для каждого пользователя в памяти
@@ -29,7 +29,7 @@ def expert_system(answers):
 
 @dp.message_created(F.message.body.text)
 async def handle_message(event: MessageCreated):
-    user_id = event.message.sender.id
+    user_id = event.message.sender.user_id
     text = event.message.body.text.strip()
 
     if user_id not in user_states:

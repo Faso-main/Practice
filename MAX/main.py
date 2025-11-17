@@ -6,7 +6,7 @@ from maxapi.types import MessageCreated
 
 logging.basicConfig(level=logging.INFO)
 
-bot = Bot('token________________________________')  
+bot = Bot('f9LHodD0cOLlRjWWo-q9VXxTxzVijqrTVKk-MRajgfhz3oc8mcuoMJEC9mpLSCaOgPhQdmTRapbbgEEoaCFk')  
 dp = Dispatcher()
 
 @dp.message_created(F.message.body.text)
@@ -23,7 +23,7 @@ async def echo(event: MessageCreated):
     logging.info(f"Получено сообщение от {user_id}: {text}")
     
     if text:
-        await event.message.answer(f"Повторяю за вами: {text}")
+        await event.message.answer(f"Копирую все, что увижу: {text}")
         logging.info("Ответ отправлен")
     else:
         logging.warning("Сообщение не содержит текста")
