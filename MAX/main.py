@@ -10,24 +10,14 @@ bot = Bot('TOKEN')
 dp = Dispatcher()
 
 @dp.message_created(F.message.body.text)
-async def echo(event: MessageCreated):
-    sender = event.message.sender
-    logging.info(f"Sender object: {sender}")
-    text = event.message.body.text if event.message.body else None
-    
-    if sender is not None:
-        user_id = getattr(sender, 'pk', None) or getattr(sender, 'user_id', None) or str(sender)
-    else:
-        user_id = "unknown"
-    
-    logging.info(f"Получено сообщение от {user_id}: {text}")
+async def handle_message(event: MessageCreated):
+    user_id = event.message.sender.user_id
+    text = event.message.body.text.strip()
     
     if text:
         await event.message.answer(f"Копирую все, что увижу: {text}")
-        await event.message.answer(f"Копирую все, что увижу: {text}")
         logging.info("Ответ отправлен")
-    else:
-        logging.warning("Сообщение не содержит текста")
+    else:   logging.warning("Сообщение не содержит текста")
 
 
 async def main():
@@ -35,7 +25,6 @@ async def main():
     await dp.start_polling(bot)
 
 if __name__ == '__main__':
-    try:
-        asyncio.run(main())
+    try:  asyncio.run(main())
     except KeyboardInterrupt: logging.info('Остановлено в ручную')
     except Exception as e: logging.warning(f'Ошибка вида: {e}')
