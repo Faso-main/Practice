@@ -24,6 +24,7 @@ async def echo(event: MessageCreated):
     
     if text:
         await event.message.answer(f"Копирую все, что увижу: {text}")
+        await event.message.answer(f"Копирую все, что увижу: {text}")
         logging.info("Ответ отправлен")
     else:
         logging.warning("Сообщение не содержит текста")
