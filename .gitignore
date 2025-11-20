@@ -8,3 +8,4 @@ Test/
 *.safetensors
 intent_classifier/
 *.pt
+Py_decorator/fridge.py
