@@ -11,8 +11,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # ------------------- ПУТИ -------------------
-DATA_PATH = os.path.join('Data_science','TH2','data', 'split.csv')
-OUTPUT_JSON = os.path.join('Data_science','TH2', 'auto_categories_bertopic.json')
+DATA_PATH = os.path.join('Data_science','TenderHack','data', 'split.csv')
+OUTPUT_JSON = os.path.join('Data_science','TenderHack', 'auto_categories_bertopic.json')
 
 # ------------------- ЧТЕНИЕ ДАННЫХ -------------------
 logger.info("Читаем данные...")
