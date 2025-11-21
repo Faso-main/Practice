@@ -9,3 +9,4 @@ Test/
 intent_classifier/
 *.pt
 Py_decorator/fridge.py
+*.bin
