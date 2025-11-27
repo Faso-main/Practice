@@ -1,0 +1,4 @@
+# # Скачать модель FastText для русского языка (может занять некоторое время)
+# wget https://dl.fbaipublicfiles.com/fasttext/vectors-crawl/cc.ru.300.bin.gz
+# gunzip cc.ru.300.bin.gz
+
