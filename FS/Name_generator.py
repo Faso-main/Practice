@@ -6,7 +6,7 @@ from collections import Counter
 import re, os
 
 class SmartFastTextGrouper:
-    def __init__(self, model_path=os.path.join('FastText','cc.ru.300.bin')):
+    def __init__(self, model_path=os.path.join('FS','cc.ru.300.bin')):
         self.model = fasttext.load_model(model_path)
         # Словарь для улучшения названий групп
         self.category_map = {
