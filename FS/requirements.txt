@@ -1,4 +1,7 @@
-# # Скачать модель FastText для русского языка (может занять некоторое время)
-# wget https://dl.fbaipublicfiles.com/fasttext/vectors-crawl/cc.ru.300.bin.gz
-# gunzip cc.ru.300.bin.gz
-
+fasttext-wheel==0.9.2
+joblib==1.5.2
+numpy==2.2.6
+pybind11==3.0.1
+scikit-learn==1.7.2
+scipy==1.15.3
+threadpoolctl==3.6.0
