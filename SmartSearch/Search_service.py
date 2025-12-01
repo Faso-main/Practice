@@ -1,34 +1,12 @@
-#!/usr/bin/env python
 import re
-from typing import List, Dict, Any
-
+import sys
 import pandas as pd
 from rapidfuzz import fuzz
 import pymorphy3
-from fastapi import FastAPI, Query
-from pydantic import BaseModel
 
-# ==========================
-#   НАСТРОЙКИ
-# ==========================
+CSV_PATH = "result_itr4.csv"  # поменяй путь, если нужно
 
-# Путь к CSV с товарами и категориями
-# Можешь поменять на абсолютный, если будешь запускать из другой директории:
-# CSV_PATH = "/root/TH3/py_back/rexexp/data/result_itr4.csv"
-CSV_PATH = "py_back/rexexp/data/result_itr4.csv"
-
-# Сколько результатов возвращаем
-DEFAULT_TOP_K = 10
-DEFAULT_MIN_SCORE = 40.0
-
-# Сколько СТЕ/строк спецификаций использовать при сборке описания категории
-MAX_PRODUCTS_PER_CAT = 50   # чтобы сильно не раздувать текст
-MAX_TOTAL_SPEC_LINES = 200  # на всякий случай, ограничение объёма
-
-
-# ==========================
-#   ИСПРАВЛЕНИЕ РАСКЛАДКИ EN→RU
-# ==========================
+# ---------- 1. Исправление раскладки EN → RU ----------
 
 EN_TO_RU = str.maketrans({
     'q':'й', 'w':'ц', 'e':'у', 'r':'к', 't':'е', 'y':'н', 'u':'г', 'i':'ш', 'o':'щ', 'p':'з', '[':'х', ']':'ъ',
@@ -36,283 +14,145 @@ EN_TO_RU = str.maketrans({
     'z':'я', 'x':'ч', 'c':'с', 'v':'м', 'b':'и', 'n':'т', 'm':'ь', ',':'б', '.':'ю', '`':'ё'
 })
 
-
-def correct_keyboard_layout(text: str) -> str:
-    """Пытаемся починить, если пользователь набрал русский на EN-раскладке."""
-    if not text:
-        return text
+def fix_layout_en_to_ru(text: str) -> str:
     return text.translate(EN_TO_RU)
 
+# ---------- 2. Нормализация + лемматизация ----------
 
-# ==========================
-#   НОРМАЛИЗАЦИЯ + ЛЕММАТИЗАЦИЯ
-# ==========================
+morph = pymorphy3.MorphAnalyzer(lang="ru")
+WORD_RE = re.compile(r"[a-zа-я0-9]+", re.IGNORECASE)
 
-_morph = pymorphy3.MorphAnalyzer()
-
-_clear_re = re.compile(r"[^a-zA-Zа-яА-ЯёЁ0-9%/.,\-\s]+")
-
-
-def normalize_text(text: str) -> str:
+def normalize_and_lemmatize(text: str) -> str:
     """
-    Приводим текст к нижнему регистру, чистим мусор,
-    заменяем ё→е, сжимаем пробелы.
+    - lower
+    - заменить ё → е
+    - вытащить токены
+    - для русских слов взять normal_form
     """
-    if not text:
-        return ""
-    text = text.lower()
+    text = str(text).lower()
     text = text.replace("ё", "е")
-    text = _clear_re.sub(" ", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    words = WORD_RE.findall(text)
 
-
-def lemmatize_text(text: str) -> str:
-    """
-    Лемматизация русских слов через pymorphy3.
-    Для смешанного текста (русский+цифры) работает нормально.
-    """
-    text = normalize_text(text)
-    if not text:
-        return ""
-
-    tokens = text.split()
     lemmas = []
-
-    for token in tokens:
-        # если чисто цифры/проценты — оставляем как есть
-        if re.fullmatch(r"[0-9%/.\-]+", token):
-            lemmas.append(token)
-            continue
-
-        parsed = _morph.parse(token)
-        if not parsed:
-            lemmas.append(token)
+    for w in words:
+        if re.search("[а-я]", w):
+            p = morph.parse(w)[0]
+            lemmas.append(p.normal_form)
         else:
-            lemmas.append(parsed[0].normal_form)
-
+            # латиница / цифры — оставляем как есть
+            lemmas.append(w)
     return " ".join(lemmas)
 
+# ---------- 3. Загрузка CSV и построение индекса ----------
 
-# ==========================
-#   СБОРКА КАТЕГОРИЙ ИЗ CSV
-# ==========================
+def build_index(csv_path: str) -> pd.DataFrame:
+    print(f"Загружаю CSV: {csv_path}")
+    df = pd.read_csv(csv_path, low_memory=False)
 
-def load_categories_from_csv() -> pd.DataFrame:
-    """
-    Читаем result_itr4.csv (СТЕ) и агрегируем всё до уровня категории.
-
-    Ожидаемые колонки в CSV:
-      - id_сте
-      - название_сте
-      - id_категории
-      - название_категории
-      - производитель
-      - страна_происхождения
-      - spec1..spec31 (строки вида "Ключ: Значение")
-    """
-    df = pd.read_csv(CSV_PATH)
-
-    # Приводим названия колонок к ожидаемым (на случай, если pandas подтянул NaN и т.п.)
-    required_cols = ["id_категории", "название_категории"]
-    for col in required_cols:
-        if col not in df.columns:
-            raise RuntimeError(f"В CSV нет обязательной колонки '{col}'")
-
-    # Собираем текст по каждой строке СТЕ: название + спец-строки
+    # колонки-спеки (описание)
     spec_cols = [c for c in df.columns if c.startswith("spec")]
 
-    def build_ste_text(row) -> str:
-        parts = []
-        ste_name = str(row.get("название_сте") or "").strip()
-        if ste_name:
-            parts.append(ste_name)
+    def join_specs(row):
+        texts = [str(row[c]) for c in spec_cols if pd.notna(row[c])]
+        return " ".join(texts)
 
-        for col in spec_cols:
-            val = row.get(col)
-            if isinstance(val, float) and pd.isna(val):
-                continue
-            val = str(val or "").strip()
-            if val:
-                parts.append(val)
+    df["category_desc_raw"] = df.apply(join_specs, axis=1)
 
-        return "; ".join(parts)
+    # Группируем по id_категории + названию (на случай дублей по товарам)
+    cat_df = (
+        df.groupby(["id_категории", "название_категории"], as_index=False)
+          .agg({"category_desc_raw": lambda x: " ".join(set(x))})
+    )
 
-    df["ste_text"] = df.apply(build_ste_text, axis=1)
+    print(f"Всего уникальных категорий: {len(cat_df)}")
 
-    # Агрегируем до уровня категории
-    # Берем первые N товаров на категорию, чтобы не раздувать описания до безумия
-    df_sorted = df.sort_values(["id_категории", "id_сте"])
+    # Нормализуем и лемматизируем заранее
+    print("Лемматизирую названия категорий...")
+    cat_df["name_norm"] = cat_df["название_категории"].apply(normalize_and_lemmatize)
 
-    grouped_rows = []
-    for cat_id, group in df_sorted.groupby("id_категории"):
-        cat_name = str(group["название_категории"].iloc[0] or "").strip()
+    print("Лемматизирую описания категорий...")
+    cat_df["desc_norm"] = cat_df["category_desc_raw"].apply(normalize_and_lemmatize)
 
-        # берем ограниченное число строк
-        g = group.head(MAX_PRODUCTS_PER_CAT)
-
-        # берем ste_text и склеиваем
-        texts = []
-        for _, row in g.iterrows():
-            t = str(row["ste_text"] or "").strip()
-            if t:
-                texts.append(t)
-            if len(texts) >= MAX_TOTAL_SPEC_LINES:
-                break
-
-        category_desc = " | ".join(texts)
-
-        grouped_rows.append(
-            {
-                "id_категории": int(cat_id),
-                "название_категории": cat_name,
-                "category_desc_raw": category_desc,
-            }
-        )
-
-    cat_df = pd.DataFrame(grouped_rows)
+    print("Индекс готов.")
     return cat_df
 
+# ---------- 4. Функция умного поиска ----------
 
-def build_index_from_csv() -> pd.DataFrame:
-    """
-    Строим индекс: нормализованные / лемматизированные поля для поиска.
-    """
-    df = load_categories_from_csv()
+def smart_search(cat_df: pd.DataFrame, query: str, top_k: int = 10, min_score: int = 40):
+    # варианты запроса: как есть и с исправленной раскладкой
+    q_orig = normalize_and_lemmatize(query)
+    q_fixed = normalize_and_lemmatize(fix_layout_en_to_ru(query))
 
-    df["name_norm"] = df["название_категории"].fillna("").astype(str).apply(
-        lambda s: lemmatize_text(correct_keyboard_layout(s))
-    )
-    df["desc_norm"] = df["category_desc_raw"].fillna("").astype(str).apply(
-        lambda s: lemmatize_text(correct_keyboard_layout(s))
-    )
+    queries = [q_orig]
+    if q_fixed != q_orig:
+        queries.append(q_fixed)
 
-    df["full_norm"] = (df["name_norm"] + " " + df["desc_norm"]).str.strip()
-
-    return df
-
-
-# ==========================
-#   ПОИСК
-# ==========================
-
-def smart_search(
-    cat_df: pd.DataFrame,
-    query: str,
-    top_k: int = DEFAULT_TOP_K,
-    min_score: float = DEFAULT_MIN_SCORE,
-) -> List[Dict[str, Any]]:
-    """
-    Умный поиск по DataFrame категорий:
-    - исправление раскладки
-    - нормализация и лемматизация запроса
-    - fuzzy по названию и описанию
-    """
-    query = (query or "").strip()
-    if not query:
-        return []
-
-    query_fixed = correct_keyboard_layout(query)
-    query_lem = lemmatize_text(query_fixed)
-
-    if not query_lem:
-        return []
-
-    results: List[Dict[str, Any]] = []
+    results = []
 
     for _, row in cat_df.iterrows():
-        name_norm = row["name_norm"]
-        desc_norm = row["desc_norm"]
+        best_score_name = 0
+        best_score_desc = 0
 
-        score_name = fuzz.WRatio(query_lem, name_norm) if name_norm else 0.0
-        score_desc = fuzz.WRatio(query_lem, desc_norm) if desc_norm else 0.0
+        for q in queries:
+            # приоритет имени категории — короткий текст
+            score_name = fuzz.partial_ratio(q, row["name_norm"])
+            # описание длинное, тоже partial_ratio
+            score_desc = fuzz.partial_ratio(q, row["desc_norm"])
 
-        final_score = max(score_name, score_desc * 0.7)
+            if score_name > best_score_name:
+                best_score_name = score_name
+            if score_desc > best_score_desc:
+                best_score_desc = score_desc
 
-        if final_score < min_score:
-            continue
+        final_score = 0.8 * best_score_name + 0.2 * best_score_desc
 
-        results.append(
-            {
-                "id": int(row["id_категории"]),
-                "name": row["название_категории"],
-                "description": row["category_desc_raw"],
-                "score": float(final_score),
-                "score_name": float(score_name),
-                "score_desc": float(score_desc),
-            }
-        )
+        if final_score >= min_score:
+            results.append({
+                "id_категории": row["id_категории"],
+                "название_категории": row["название_категории"],
+                "score": final_score,
+                "score_name": best_score_name,
+                "score_desc": best_score_desc,
+            })
 
     results.sort(key=lambda x: x["score"], reverse=True)
     return results[:top_k]
 
+# ---------- 5. Простой CLI для обкатки ----------
 
-# ==========================
-#   FASTAPI СЕРВИС
-# ==========================
+def main():
+    cat_df = build_index(CSV_PATH)
 
-app = FastAPI(title="TH3 Smart Search (CSV-based)")
+    print()
+    print("=== УМНЫЙ ПОИСК ПО КАТЕГОРИЯМ ===")
+    print("Пиши запрос, пустая строка — выход.")
+    print()
 
-cat_index: pd.DataFrame | None = None
+    while True:
+        try:
+            q = input("Запрос> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nВыход.")
+            break
 
+        if not q:
+            print("Выход.")
+            break
 
-class SearchResult(BaseModel):
-    id: int
-    name: str
-    description: str | None = None
-    score: float
-    score_name: float
-    score_desc: float
+        res = smart_search(cat_df, q, top_k=10, min_score=40)
 
+        if not res:
+            print("Ничего не найдено (score < 40).")
+            continue
 
-@app.on_event("startup")
-def on_startup():
-    global cat_index
-    print(f"Загрузка категорий из CSV: {CSV_PATH}")
-    cat_index = build_index_from_csv()
-    print(f"Индекс готов, категорий: {len(cat_index)}")
+        for r in res:
+            print(
+                f"[{r['score']:.1f}] id={r['id_категории']} | "
+                f"{r['название_категории']} "
+                f"(name={r['score_name']:.1f}, desc={r['score_desc']:.1f})"
+            )
 
-
-@app.get("/health")
-def health():
-    return {
-        "status": "ok",
-        "categories_indexed": 0 if cat_index is None else len(cat_index),
-        "csv_path": CSV_PATH,
-    }
-
-
-@app.post("/reload")
-def reload_index():
-    """
-    Пересобрать индекс (можно дергать после обновления CSV).
-    """
-    global cat_index
-    cat_index = build_index_from_csv()
-    return {"status": "reloaded", "categories_indexed": len(cat_index)}
-
-
-@app.get("/search/categories", response_model=List[SearchResult])
-def search_categories(
-    q: str = Query(..., min_length=1),
-    top_k: int = Query(DEFAULT_TOP_K, ge=1, le=50),
-    min_score: float = Query(DEFAULT_MIN_SCORE, ge=0.0, le=100.0),
-):
-    global cat_index
-    if cat_index is None or cat_index.empty:
-        return []
-
-    results = smart_search(cat_index, q, top_k=top_k, min_score=min_score)
-    return [SearchResult(**r) for r in results]
-
+        print()
 
 if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(
-        "search_service:app",
-        host="127.0.0.1",
-        port=8001,
-        reload=False,
-        workers=1,
-    )
+    main()
